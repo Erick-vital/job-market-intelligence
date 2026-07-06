@@ -1,0 +1,87 @@
+{
+  "version": "sample.v1",
+  "updated_at": "2026-07-06",
+  "purpose": "Sample canonical profile used by the local job matching engine.",
+  "supporting_skill": "docs/technical-profile-evidence-skill.md",
+  "capabilities": [
+    {
+      "id": "backend_python_api_design",
+      "name": "Backend Python and API design",
+      "level": "strong",
+      "confidence": "high",
+      "evidence_type": "sample",
+      "summary": "Builds Python backend APIs, service layers, data ingestion endpoints, and local automation workflows.",
+      "skills": [
+        "Python",
+        "FastAPI",
+        "Pydantic",
+        "REST APIs",
+        "SQLite",
+        "pytest"
+      ],
+      "evidence_refs": [
+        "sample-profile"
+      ],
+      "cv_phrases": [
+        "Built Python/FastAPI services with structured schemas, tests, and persistence."
+      ]
+    },
+    {
+      "id": "data_automation_and_intelligence",
+      "name": "Data automation and intelligence workflows",
+      "level": "strong",
+      "confidence": "medium_high",
+      "evidence_type": "sample",
+      "summary": "Transforms messy external data into normalized artifacts, reports, and decision-support signals.",
+      "skills": [
+        "CSV",
+        "JSONL",
+        "ETL",
+        "Data pipelines",
+        "Market intelligence",
+        "Automation"
+      ],
+      "evidence_refs": [
+        "sample-profile"
+      ],
+      "cv_phrases": [
+        "Converted unstructured market data into structured reports and prioritization signals."
+      ]
+    },
+    {
+      "id": "cloud_and_operations",
+      "name": "Cloud and operations familiarity",
+      "level": "working",
+      "confidence": "medium",
+      "evidence_type": "sample",
+      "summary": "Understands cloud services, deployment operations, and production-minded backend work.",
+      "skills": [
+        "AWS",
+        "Lambda",
+        "S3",
+        "DynamoDB",
+        "Docker",
+        "CI/CD"
+      ],
+      "evidence_refs": [
+        "sample-profile"
+      ],
+      "cv_phrases": [
+        "Worked with cloud-oriented backend automation and deployment workflows."
+      ]
+    }
+  ],
+  "job_matching_guidance": {
+    "prioritize": [
+      "backend",
+      "automation",
+      "data",
+      "cloud",
+      "platform"
+    ],
+    "deprioritize": [
+      "frontend-only",
+      "mobile-only"
+    ]
+  }
+}

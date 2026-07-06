@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LinkedIn Jobs Capture</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#111827; --panel:#1f2937; --text:#f9fafb; --muted:#9ca3af; --accent:#0a66c2; --accent-2:#1d4ed8; --danger:#dc2626; --border:rgba(255,255,255,.12); }
+    body { margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); width:320px; }
+    main { padding:14px; display:flex; flex-direction:column; gap:12px; }
+    h1 { font-size:16px; margin:0; }
+    p { margin:0; color:var(--muted); font-size:12px; line-height:1.45; }
+    .card { border:1px solid var(--border); background:var(--panel); border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:10px; }
+    .count { font-size:26px; font-weight:700; line-height:1; }
+    .label { color:var(--muted); font-size:12px; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; }
+    button { border:0; border-radius:10px; padding:10px 12px; font-weight:600; cursor:pointer; color:white; background:var(--accent); flex:1 1 120px; }
+    button.secondary { background:var(--accent-2); }
+    button.ghost { background:transparent; border:1px solid var(--border); color:var(--text); }
+    button.danger { background:var(--danger); }
+    button:hover { filter:brightness(1.05); }
+    .status, .small { font-size:12px; color:var(--muted); white-space:pre-wrap; }
+    .small { font-size:11px; }
+    code { font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; font-size:11px; }
+  </style>
+</head>
+<body>
+  <main>
+    <div>
+      <h1>LinkedIn Jobs Capture</h1>
+      <p>The capture bar appears on LinkedIn Jobs pages. Save visible jobs while browsing manually, then export the session here.</p>
+    </div>
+
+    <section class="card">
+      <div>
+        <div class="label">Jobs saved in this local session</div>
+        <div class="count" id="count">0</div>
+      </div>
+      <div class="row">
+        <button id="export-csv">Export CSV</button>
+        <button class="secondary" id="export-jsonl">Export JSONL</button>
+      </div>
+      <div class="row">
+        <button class="danger" id="clear">Clear session</button>
+        <button class="ghost" id="refresh">Refresh</button>
+      </div>
+      <div class="status" id="status">Open LinkedIn Jobs to use the floating capture bar.</div>
+    </section>
+
+    <p class="small">No network calls. No auto-scroll. No automated LinkedIn actions.</p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

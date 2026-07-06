@@ -1,0 +1,31 @@
+categories:
+  repo_evidenced_backend:
+    skills:
+      - Python
+      - FastAPI
+      - Pydantic
+      - REST APIs
+      - SQLite
+      - pytest
+  data_and_automation:
+    skills:
+      - CSV
+      - JSONL
+      - ETL
+      - Data pipelines
+      - Market intelligence
+      - Automation
+  declared_cloud_ops:
+    skills:
+      - AWS
+      - Lambda
+      - S3
+      - DynamoDB
+      - Docker
+      - CI/CD
+  frontend_ui:
+    skills:
+      - HTMX
+      - Jinja2
+      - Tailwind
+      - React

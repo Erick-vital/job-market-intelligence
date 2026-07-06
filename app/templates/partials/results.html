@@ -1,0 +1,45 @@
+<div class="card results">
+  <h2>Analysis complete</h2>
+  <div class="metrics">
+    <div><strong>{{ batch.processed }}</strong><span>jobs analyzed</span></div>
+    <div><strong>{{ report.good_or_better_matches }}</strong><span>good+ matches</span></div>
+    <div><strong>{{ report.strong_matches }}</strong><span>strong matches</span></div>
+    <div><strong>{{ batch.skipped_invalid }}</strong><span>skipped rows</span></div>
+  </div>
+
+  <div class="columns">
+    <section>
+      <h3>Top matched skills</h3>
+      <ul>
+        {% for item in report.top_matched_skills %}<li>{{ item.name }} <span>{{ item.count }}</span></li>{% else %}<li>No data yet.</li>{% endfor %}
+      </ul>
+    </section>
+    <section>
+      <h3>Top missing skills</h3>
+      <ul>
+        {% for item in report.top_missing_skills %}<li>{{ item.name }} <span>{{ item.count }}</span></li>{% else %}<li>No gaps detected.</li>{% endfor %}
+      </ul>
+    </section>
+  </div>
+
+  <h3>Recommended matches</h3>
+  <div class="match-list">
+    {% for match in matches %}
+      <article class="match">
+        <div class="score">{{ '%.3f'|format(match.fit_score) }}</div>
+        <div>
+          <h4>{{ match.job.title }} — {{ match.job.company }}</h4>
+          <p>{{ match.job.location }}</p>
+          <p>{{ match.reasons|join(' ') }}</p>
+          <p><strong>Matched:</strong> {{ match.matched_skills|join(', ') }}</p>
+          {% if match.missing_skills %}<p><strong>Gaps:</strong> {{ match.missing_skills|join(', ') }}</p>{% endif %}
+          {% if match.job.source_url %}<a href="{{ match.job.source_url }}" target="_blank" rel="noreferrer">Open source</a>{% endif %}
+        </div>
+      </article>
+    {% else %}
+      <p>No matches above the threshold. Try lowering the min score or improving the profile taxonomy.</p>
+    {% endfor %}
+  </div>
+
+  <p class="path-note">Report saved to: <code>{{ batch.report_path }}</code></p>
+</div>

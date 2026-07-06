@@ -1,0 +1,4 @@
+source,source_job_id,source_url,title,company,location,posted_text,description,capture_method
+linkedin_jobs,1001,https://www.linkedin.com/jobs/view/1001/,Backend Python Engineer,Acme Data,Remote,2 days ago,"Build Python FastAPI REST APIs with SQLite, AWS Lambda, S3, and automation workflows.",browser_extension_visible_detail
+linkedin_jobs,1002,https://www.linkedin.com/jobs/view/1002/,Frontend React Developer,Pixel Apps,Remote,1 week ago,"Build React CSS mobile UI and frontend-only components.",browser_extension_visible_detail
+linkedin_jobs,1003,https://www.linkedin.com/jobs/view/1003/,Data Automation Engineer,SignalWorks,Mexico Remote,3 days ago,"Create ETL pipelines from CSV and JSONL sources, generate market intelligence reports, and automate operations.",browser_extension_visible_detail

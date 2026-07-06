@@ -1,0 +1,23 @@
+[project]
+name = "job-market-intelligence"
+version = "0.1.0"
+description = "Open-source local app for turning job postings into market intelligence and personalized opportunity scoring."
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi",
+  "uvicorn[standard]",
+  "python-multipart",
+  "pydantic",
+  "pyyaml",
+  "jinja2",
+]
+
+[dependency-groups]
+dev = [
+  "pytest",
+  "httpx",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
