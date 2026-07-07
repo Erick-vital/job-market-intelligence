@@ -56,17 +56,30 @@ class JobMatchingService:
         )
         return match
 
-    async def generate_cv(self, *, job: JobPosting, language: str = "en") -> GeneratedCv:
+    async def generate_cv(
+        self,
+        *,
+        job: JobPosting,
+        api_key: str,
+        language: str = "en",
+        provider: str | None = None,
+        model: str | None = None,
+        base_url: str | None = None,
+    ) -> GeneratedCv:
         output_dir = self.settings.jobs_items_dir.parent / "cvs"
-        cv = generate_targeted_cv(
+        cv = await generate_targeted_cv(
             profile_json_path=self.settings.profile_json_path,
             output_dir=output_dir,
             job=job,
+            api_key=api_key,
             language=language,
+            provider=provider,
+            model=model,
+            base_url=base_url,
         )
         logger.info(
             "targeted cv generated",
-            extra={"company": job.company, "title": job.title, "path": str(cv.path)},
+            extra={"company": job.company, "title": job.title, "path": str(cv.path), "provider": cv.provider, "model": cv.model},
         )
         return cv
 

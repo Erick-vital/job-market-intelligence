@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, StringConstraints
 from typing_extensions import Annotated
 
 from app.models.job_matching import JobPosting
+from app.services.settings import get_llm_provider
 
 
 class JobRecordIn(BaseModel):
@@ -77,9 +78,13 @@ class CvGenerateRequest(BaseModel):
     company: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
     title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
     description: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+    api_key: str | None = None
     location: str = ""
     source_url: str = ""
     language: str = "en"
+    provider: str = get_llm_provider()
+    model: str | None = None
+    base_url: str | None = None
 
     def to_job(self) -> JobPosting:
         return JobPosting(
@@ -99,3 +104,5 @@ class CvGenerateResponse(BaseModel):
     markdown: str
     path: str
     matched_capabilities: list[str]
+    provider: str
+    model: str

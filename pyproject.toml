@@ -10,6 +10,7 @@ dependencies = [
   "pydantic",
   "pyyaml",
   "jinja2",
+  "httpx",
 ]
 
 [dependency-groups]

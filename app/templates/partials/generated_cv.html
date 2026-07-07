@@ -1,6 +1,7 @@
 <div class="card results">
   <h2>Generated CV</h2>
   <p class="path-note">Saved to: <code>{{ generated.path }}</code></p>
+  <p class="path-note">Provider: <code>{{ generated.provider }}</code> · Model: <code>{{ generated.model }}</code></p>
   {% if generated.matched_capabilities %}
     <p><strong>Matched capabilities:</strong> {{ generated.matched_capabilities|join(', ') }}</p>
   {% endif %}

@@ -5,6 +5,9 @@ from fastapi.staticfiles import StaticFiles
 
 from app.routes.api import router as api_router
 from app.routes.web import router as web_router
+from app.services.logging_config import configure_logging
+
+configure_logging()
 
 app = FastAPI(
     title="Job Market Intelligence",

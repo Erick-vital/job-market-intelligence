@@ -44,7 +44,7 @@ Full process documentation:
 - Company signals
 - Sample canonical technical profile
 - Technical profile generator script
-- Local targeted CV draft generation in Markdown
+- Model-powered targeted CV draft generation in Markdown
 - LinkedIn Jobs capture browser extension
 
 ## What is intentionally not included
@@ -135,9 +135,40 @@ The response returns one deterministic match with:
 
 ### 3. Generate a targeted CV draft
 
-Use the `Generate CV` section in the web UI to paste a target job and create a local Markdown CV draft.
+Use the `Generate CV` section in the web UI to paste a target job and create a model-written Markdown CV draft.
 
-API example:
+Configure your local LLM API key in a `.env` file at the repo root:
+
+```bash
+JMI_LLM_PROVIDER=anthropic
+JMI_ANTHROPIC_API_KEY=sk-ant-...
+# Optional: leave unset to use the provider default, or use a Claude Code label/API id.
+# Supported Anthropic aliases: Sonnet-5, Fable, Opus, Haiku.
+JMI_LLM_MODEL=Sonnet-5
+# Optional; defaults to https://api.anthropic.com for Anthropic.
+JMI_LLM_BASE_URL=
+```
+
+The app reads those values server-side and does not require them in each request. The model receives:
+
+- the target job description;
+- the canonical technical profile;
+- deterministic match context;
+- matched skills, gaps, and profile-backed `cv_phrases`.
+
+Default provider settings:
+
+```text
+provider: openai_compatible
+model: gpt-4o-mini
+base_url: https://api.openai.com/v1
+
+provider: anthropic
+model: claude-sonnet-5
+base_url: https://api.anthropic.com
+```
+
+You can also set those defaults globally with `JMI_LLM_PROVIDER`, `JMI_LLM_MODEL`, and `JMI_LLM_BASE_URL`. Request-level `provider`, `model`, and `base_url` values still override them. For Anthropic, friendly labels from Claude Code are normalized before calling the API: `Sonnet-5` -> `claude-sonnet-5`, `Fable` -> `claude-fable-5`, `Opus` -> `claude-opus-4-8`, and `Haiku` -> `claude-haiku-4-5-20251001`.
 
 ```bash
 curl -X POST http://127.0.0.1:8020/api/cv/generate \
@@ -146,7 +177,9 @@ curl -X POST http://127.0.0.1:8020/api/cv/generate \
     "company": "Acme",
     "title": "Backend Python Engineer",
     "description": "Build Python FastAPI REST APIs, data pipelines, AWS Lambda, and SQLite automation.",
-    "language": "en"
+    "language": "en",
+    "provider": "openai_compatible",
+    "model": "gpt-4o-mini"
   }'
 ```
 
@@ -156,7 +189,7 @@ Generated CV drafts are saved under:
 items/cvs/
 ```
 
-The CV generator is intentionally evidence-oriented: it selects capabilities, skills, and `cv_phrases` from the canonical profile instead of inventing private experience.
+The CV generator is intentionally evidence-oriented: the prompt instructs the model to use only capabilities, skills, and CV phrases from the canonical profile and to avoid inventing employers, degrees, certifications, metrics, or personal data.
 
 ## Create or update your technical profile
 
@@ -223,6 +256,7 @@ JMI_JOBS_ITEMS_DIR=./items/jobs
 JMI_PROFILE_JSON_PATH=./items/profile/technical_experience.json
 JMI_SKILL_TAXONOMY_PATH=./items/profile/skill_taxonomy.yaml
 JMI_MIN_SCORE=0.42
+JMI_LLM_API_KEY=sk-...
 ```
 
 ## Project layout
