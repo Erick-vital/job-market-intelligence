@@ -12,11 +12,20 @@
       <section class="hero">
         <p class="eyebrow">Open-source · local-first</p>
         <h1>Turn job postings into market intelligence.</h1>
-        <p class="lead">Upload a CSV or JSONL export, match it against a canonical technical profile, and get fit scores, skill demand, gaps, companies, and an exportable report.</p>
+        <p class="lead">Define a canonical technical profile once, then use it to evaluate job postings, understand demand, detect gaps, and generate targeted application material.</p>
       </section>
 
-      <section class="card">
-        <h2>Analyze jobs</h2>
+      <nav class="menu" aria-label="Primary tools">
+        <a href="#batch-analysis">Analyze file</a>
+        <a href="#manual-match">Manual match</a>
+        <a href="#profile">Technical profile</a>
+        <a href="#cv-generator">Generate CV</a>
+      </nav>
+
+      <section id="batch-analysis" class="card">
+        <p class="eyebrow">Batch analysis</p>
+        <h2>Analyze jobs from CSV or JSONL</h2>
+        <p class="muted">Upload exported job postings and get ranked matches, demanded skills, gaps, company signals, and a Markdown report.</p>
         <form hx-post="/ui/jobs/import" hx-target="#results" hx-swap="innerHTML" enctype="multipart/form-data">
           <label>CSV or JSONL file
             <input type="file" name="file" accept=".csv,.jsonl,.ndjson" required />
@@ -29,7 +38,90 @@
               <input type="number" name="min_score" min="0" max="1" step="0.01" placeholder="0.42" />
             </label>
           </div>
-          <button type="submit">Run analysis</button>
+          <button type="submit">Run batch analysis</button>
+        </form>
+      </section>
+
+      <section id="manual-match" class="card">
+        <p class="eyebrow">Manual match</p>
+        <h2>Compare one job manually</h2>
+        <p class="muted">Paste a single job description when you want a quick one-by-one fit check without preparing a CSV.</p>
+        <form hx-post="/ui/jobs/match" hx-target="#results" hx-swap="innerHTML">
+          <div class="grid-two">
+            <label>Company
+              <input type="text" name="company" placeholder="Acme" required />
+            </label>
+            <label>Job title
+              <input type="text" name="title" placeholder="Backend Python Engineer" required />
+            </label>
+          </div>
+          <label>Job description
+            <textarea name="description" rows="9" placeholder="Paste the job description here" required></textarea>
+          </label>
+          <div class="grid-two">
+            <label>Location optional
+              <input type="text" name="location" placeholder="Remote Mexico" />
+            </label>
+            <label>Source URL optional
+              <input type="url" name="source_url" placeholder="https://..." />
+            </label>
+          </div>
+          <button type="submit">Run manual match</button>
+        </form>
+      </section>
+
+      <section id="profile" class="card">
+        <p class="eyebrow">Technical profile</p>
+        <h2>The canonical profile is the matching engine's source of truth</h2>
+        <p class="muted">Job scoring and CV generation read the same local profile files. Replace the sample profile before using the app seriously.</p>
+        <div class="columns">
+          <section>
+            <h3>Profile files</h3>
+            <ul>
+              <li><code>items/profile/technical_experience.json</code></li>
+              <li><code>items/profile/technical_experience.md</code></li>
+              <li><code>items/profile/skill_taxonomy.yaml</code></li>
+              <li><code>items/profile/repo_evidence.jsonl</code></li>
+            </ul>
+          </section>
+          <section>
+            <h3>Generate a starter profile</h3>
+            <pre><code>uv run python scripts/generate_technical_experience.py \
+  --evidence items/profile/repo_evidence.jsonl \
+  --out items/profile/technical_experience.json</code></pre>
+            <p class="path-note">More detail: <code>docs/canonical_technical_profile.md</code></p>
+          </section>
+        </div>
+      </section>
+
+      <section id="cv-generator" class="card">
+        <p class="eyebrow">Generate CV</p>
+        <h2>Create a local targeted CV draft</h2>
+        <p class="muted">The generator selects profile-backed capabilities, CV-ready phrases, matched skills, and cautions. It writes Markdown under <code>items/cvs/</code>.</p>
+        <form hx-post="/ui/cv/generate" hx-target="#results" hx-swap="innerHTML">
+          <div class="grid-two">
+            <label>Company
+              <input type="text" name="company" placeholder="Acme" required />
+            </label>
+            <label>Job title
+              <input type="text" name="title" placeholder="Backend Python Engineer" required />
+            </label>
+          </div>
+          <label>Job description
+            <textarea name="description" rows="9" placeholder="Paste the target job description here" required></textarea>
+          </label>
+          <div class="grid-two">
+            <label>Location optional
+              <input type="text" name="location" placeholder="Remote Mexico" />
+            </label>
+            <label>Language
+              <select name="language">
+                <option value="en">English</option>
+                <option value="es">Español</option>
+              </select>
+            </label>
+          </div>
+          <button type="submit">Generate CV draft</button>
         </form>
       </section>
 

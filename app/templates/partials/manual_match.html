@@ -1,0 +1,15 @@
+<div class="card results">
+  <h2>Manual match result</h2>
+  <article class="match">
+    <div class="score">{{ '%.3f'|format(match.fit_score) }}</div>
+    <div>
+      <h3>{{ match.job.title }} — {{ match.job.company }}</h3>
+      <p>{{ match.job.location }}</p>
+      <p><strong>Level:</strong> {{ match.fit_level }}</p>
+      <p>{{ match.reasons|join(' ') }}</p>
+      <p><strong>Matched:</strong> {{ match.matched_skills|join(', ') if match.matched_skills else 'No clear matches.' }}</p>
+      {% if match.missing_skills %}<p><strong>Gaps:</strong> {{ match.missing_skills|join(', ') }}</p>{% endif %}
+      {% if match.job.source_url %}<a href="{{ match.job.source_url }}" target="_blank" rel="noreferrer">Open source</a>{% endif %}
+    </div>
+  </article>
+</div>

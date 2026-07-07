@@ -48,6 +48,8 @@ def test_home_page_and_htmx_upload(tmp_path):
     home = client.get("/")
     assert home.status_code == 200
     assert "Turn job postings into market intelligence" in home.text
+    assert "Manual match" in home.text
+    assert "Generate CV" in home.text
     csv_text = (
         "source_job_id,title,company,description\n"
         "1,Backend Python Engineer,Acme,Python FastAPI REST APIs AWS Lambda SQLite\n"
@@ -57,3 +59,81 @@ def test_home_page_and_htmx_upload(tmp_path):
     assert response.status_code == 200
     assert "Analysis complete" in response.text
     assert "Backend Python Engineer" in response.text
+
+
+def test_manual_match_api_scores_single_job(tmp_path):
+    app.dependency_overrides[api_route.get_job_matching_service] = lambda: _service(tmp_path)
+    response = TestClient(app).post(
+        "/api/jobs/match",
+        json={
+            "company": "Acme",
+            "title": "Backend Python Engineer",
+            "description": "Build Python FastAPI REST APIs with AWS Lambda and SQLite.",
+            "location": "Remote Mexico",
+        },
+    )
+    app.dependency_overrides.clear()
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "completed"
+    assert body["match"]["company"] == "Acme"
+    assert body["match"]["title"] == "Backend Python Engineer"
+    assert body["match"]["fit_score"] >= 0.42
+    assert "Python" in body["match"]["matched_skills"]
+
+
+def test_manual_match_htmx_form_returns_single_result(tmp_path):
+    app.dependency_overrides[web_route.get_job_matching_service] = lambda: _service(tmp_path)
+    response = TestClient(app).post(
+        "/ui/jobs/match",
+        data={
+            "company": "Acme",
+            "title": "Backend Python Engineer",
+            "description": "Build Python FastAPI REST APIs with AWS Lambda and SQLite.",
+            "location": "Remote Mexico",
+        },
+    )
+    app.dependency_overrides.clear()
+    assert response.status_code == 200
+    assert "Manual match result" in response.text
+    assert "Backend Python Engineer" in response.text
+    assert "Python" in response.text
+
+
+def test_generate_cv_api_returns_markdown_and_saves_file(tmp_path):
+    app.dependency_overrides[api_route.get_job_matching_service] = lambda: _service(tmp_path)
+    response = TestClient(app).post(
+        "/api/cv/generate",
+        json={
+            "company": "Acme",
+            "title": "Backend Python Engineer",
+            "description": "Build Python FastAPI REST APIs, data pipelines, AWS Lambda, and SQLite automation.",
+            "language": "en",
+        },
+    )
+    app.dependency_overrides.clear()
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "completed"
+    assert "# Targeted CV" in body["markdown"]
+    assert "Backend Python Engineer" in body["markdown"]
+    assert "Built Python/FastAPI services" in body["markdown"]
+    assert Path(body["path"]).exists()
+
+
+def test_generate_cv_htmx_form_returns_markdown(tmp_path):
+    app.dependency_overrides[web_route.get_job_matching_service] = lambda: _service(tmp_path)
+    response = TestClient(app).post(
+        "/ui/cv/generate",
+        data={
+            "company": "Acme",
+            "title": "Backend Python Engineer",
+            "description": "Build Python FastAPI REST APIs, data pipelines, AWS Lambda, and SQLite automation.",
+            "language": "en",
+        },
+    )
+    app.dependency_overrides.clear()
+    assert response.status_code == 200
+    assert "Generated CV" in response.text
+    assert "Backend Python Engineer" in response.text
+    assert "Built Python/FastAPI services" in response.text

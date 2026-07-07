@@ -46,3 +46,56 @@ class JobMatchResponse(BaseModel):
     matches: list[dict]
     report: dict[str, Any]
     paths: dict[str, str]
+
+
+class ManualJobMatchRequest(BaseModel):
+    company: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+    description: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+    location: str = ""
+    source_url: str = ""
+
+    def to_job(self) -> JobPosting:
+        return JobPosting(
+            company=self.company,
+            title=self.title,
+            description=self.description,
+            location=self.location,
+            source_url=self.source_url,
+            capture_method="manual",
+            source="manual",
+            raw={"manual_entry": True},
+        )
+
+
+class ManualJobMatchResponse(BaseModel):
+    status: str
+    match: dict[str, Any]
+
+
+class CvGenerateRequest(BaseModel):
+    company: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+    description: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+    location: str = ""
+    source_url: str = ""
+    language: str = "en"
+
+    def to_job(self) -> JobPosting:
+        return JobPosting(
+            company=self.company,
+            title=self.title,
+            description=self.description,
+            location=self.location,
+            source_url=self.source_url,
+            capture_method="manual_cv_generation",
+            source="manual",
+            raw={"manual_entry": True},
+        )
+
+
+class CvGenerateResponse(BaseModel):
+    status: str
+    markdown: str
+    path: str
+    matched_capabilities: list[str]

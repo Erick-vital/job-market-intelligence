@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
-from app.schemas.job_matching import JobMatchResponse
+from app.schemas.job_matching import (
+    CvGenerateRequest,
+    CvGenerateResponse,
+    JobMatchResponse,
+    ManualJobMatchRequest,
+    ManualJobMatchResponse,
+)
 from app.services.job_file_parser import JobFileParseError
 from app.services.job_matching import JobMatchingService, build_job_matching_service_from_env
 
@@ -47,4 +53,27 @@ async def import_jobs(
             "report_markdown": str(batch.report_path),
             "batch_dir": str(batch.batch_dir),
         },
+    )
+
+
+@router.post("/jobs/match", response_model=ManualJobMatchResponse)
+async def match_manual_job(
+    payload: ManualJobMatchRequest,
+    service: JobMatchingService = Depends(get_job_matching_service),
+) -> ManualJobMatchResponse:
+    match = await service.match_manual_job(job=payload.to_job())
+    return ManualJobMatchResponse(status="completed", match=match.to_response_dict())
+
+
+@router.post("/cv/generate", response_model=CvGenerateResponse)
+async def generate_cv(
+    payload: CvGenerateRequest,
+    service: JobMatchingService = Depends(get_job_matching_service),
+) -> CvGenerateResponse:
+    generated = await service.generate_cv(job=payload.to_job(), language=payload.language)
+    return CvGenerateResponse(
+        status="completed",
+        markdown=generated.markdown,
+        path=str(generated.path),
+        matched_capabilities=generated.matched_capabilities,
     )
