@@ -47,15 +47,6 @@ Full process documentation:
 - Model-powered targeted CV draft generation in Markdown
 - LinkedIn Jobs capture browser extension
 
-## What is intentionally not included
-
-- CRM
-- Transcription endpoints
-- Private provider integrations
-- Automatic LinkedIn scraping
-- Admin/systemd endpoints
-- Personal data, private SQLite files, real job history, or private artifacts
-
 ## Quick start
 
 ```bash
