@@ -85,7 +85,7 @@ async def generate_profile(
         "profile api generate requested",
         extra={"public_repo_url_count": len(payload.public_repo_urls), "local_repo_path_count": len(payload.local_repo_paths)},
     )
-    return service.generate_profile(payload)
+    return await service.generate_profile(payload)
 
 
 @router.post("/cv/generate", response_model=CvGenerateResponse)

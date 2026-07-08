@@ -214,14 +214,31 @@ Recommended profile workflow:
 
 ### Generate the technical profile from repos
 
-From the web UI, use `Technical profile` -> `Generar perfil`.
+From the web UI, use `Technical profile` -> `Actualizar perfil`.
 
 You can provide:
 
 - public HTTPS Git repository URLs, one per line;
 - local repository paths, one per line.
 
-Local paths are useful for private repos because the app analyzes them locally and does not upload code. The generator reads repo structure and text files conservatively; it does not execute code from analyzed repos.
+Local paths are useful for private repos because the app analyzes them locally and does not execute code from analyzed repos.
+
+The update flow writes granular repo signals to `items/profile/repo_evidence.jsonl`, then updates `items/profile/technical_experience.json`. When an LLM API key is configured, the profile update uses the documented `docs/technical-profile-evidence-skill.md` as prompt context through the shared LLM generation service, so repo evidence is translated into general capabilities instead of endpoint-by-endpoint documentation. If no LLM key is configured or the provider fails, it falls back to the deterministic generator.
+
+CLI options:
+
+```bash
+# deterministic fallback generator
+uv run python scripts/generate_technical_experience.py \
+  --evidence items/profile/repo_evidence.jsonl \
+  --out items/profile/technical_experience.json
+
+# skill-guided LLM generator
+uv run python scripts/generate_technical_experience.py \
+  --use-llm \
+  --evidence items/profile/repo_evidence.jsonl \
+  --out items/profile/technical_experience.json
+```
 
 The generator updates:
 

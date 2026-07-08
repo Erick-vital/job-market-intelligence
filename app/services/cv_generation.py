@@ -9,11 +9,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import httpx
-
 from app.models.job_matching import JobMatchResult, JobPosting
+from app.services.llm_generation import LlmGenerationProviderError, LlmGenerationService
 from app.services.profile_matcher import _searchable, score_job
-from app.services.settings import get_llm_api_key, get_llm_base_url, get_llm_default_model, get_llm_model, get_llm_provider
 
 logger = logging.getLogger(__name__)
 
@@ -40,193 +38,6 @@ def _cv_system_prompt() -> str:
     )
 
 
-@dataclass(frozen=True)
-class OpenAiCompatibleCvProvider:
-    api_key: str
-    model: str
-    base_url: str
-    timeout_seconds: int = 90
-
-    async def generate_markdown(self, *, prompt: str) -> str:
-        endpoint = self.base_url.rstrip("/") + "/chat/completions"
-        payload = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": _cv_system_prompt()},
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.2,
-        }
-        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
-        return await _post_and_extract_openai_chat_completion(
-            endpoint=endpoint,
-            headers=headers,
-            payload=payload,
-            timeout_seconds=self.timeout_seconds,
-            provider="openai_compatible",
-            model=self.model,
-        )
-
-
-@dataclass(frozen=True)
-class AnthropicCvProvider:
-    api_key: str
-    model: str
-    base_url: str
-    timeout_seconds: int = 90
-
-    async def generate_markdown(self, *, prompt: str) -> str:
-        endpoint = self.base_url.rstrip("/") + "/v1/messages"
-        payload = {
-            "model": self.model,
-            "max_tokens": 2000,
-            "system": _cv_system_prompt(),
-            "messages": [{"role": "user", "content": prompt}],
-        }
-        headers = {
-            "x-api-key": self.api_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        }
-        return await _post_and_extract_anthropic_message(
-            endpoint=endpoint,
-            headers=headers,
-            payload=payload,
-            timeout_seconds=self.timeout_seconds,
-            provider="anthropic",
-            model=self.model,
-        )
-
-
-def _build_provider(*, provider: str, api_key: str, model: str, base_url: str):
-    if provider == "anthropic":
-        return AnthropicCvProvider(api_key=api_key, model=model, base_url=base_url)
-    if provider in {"openai", "openai_compatible"}:
-        return OpenAiCompatibleCvProvider(api_key=api_key, model=model, base_url=base_url)
-    raise CvGenerationProviderError(f"Unsupported LLM provider: {provider}")
-
-
-async def _post_json(
-    *,
-    endpoint: str,
-    headers: dict[str, str],
-    payload: dict[str, Any],
-    timeout_seconds: int,
-    provider: str,
-    model: str,
-) -> httpx.Response:
-    logger.info(
-        "cv provider request started",
-        extra={"provider": provider, "model": model, "endpoint": endpoint, "timeout_seconds": timeout_seconds},
-    )
-    try:
-        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-            response = await client.post(endpoint, headers=headers, json=payload)
-            response.raise_for_status()
-            logger.info(
-                "cv provider request completed",
-                extra={"provider": provider, "model": model, "endpoint": endpoint, "status_code": response.status_code},
-            )
-            return response
-    except httpx.HTTPStatusError as exc:
-        status_code = exc.response.status_code if exc.response is not None else None
-        response_text = _safe_response_text(exc.response)
-        logger.warning(
-            "cv provider request returned error status",
-            extra={
-                "provider": provider,
-                "model": model,
-                "endpoint": endpoint,
-                "status_code": status_code,
-                "response_body": response_text,
-            },
-        )
-        raise CvGenerationProviderError(
-            f"CV provider request failed: {exc}. Response body: {response_text}",
-            status_code=status_code,
-        ) from exc
-    except httpx.HTTPError as exc:
-        logger.warning(
-            "cv provider request failed",
-            extra={"provider": provider, "model": model, "endpoint": endpoint, "error": str(exc)},
-        )
-        raise CvGenerationProviderError(f"CV provider request failed: {exc}") from exc
-    except RuntimeError as exc:
-        logger.warning(
-            "cv provider request failed",
-            extra={"provider": provider, "model": model, "endpoint": endpoint, "error": str(exc)},
-        )
-        raise CvGenerationProviderError(f"CV provider request failed: {exc}") from exc
-
-
-def _safe_response_text(response: httpx.Response | None, limit: int = 1000) -> str:
-    if response is None:
-        return ""
-    text = response.text or ""
-    return text[:limit]
-
-
-async def _post_and_extract_openai_chat_completion(
-    *,
-    endpoint: str,
-    headers: dict[str, str],
-    payload: dict[str, Any],
-    timeout_seconds: int,
-    provider: str,
-    model: str,
-) -> str:
-    response = await _post_json(
-        endpoint=endpoint,
-        headers=headers,
-        payload=payload,
-        timeout_seconds=timeout_seconds,
-        provider=provider,
-        model=model,
-    )
-    data = response.json()
-    try:
-        content = data["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError) as exc:
-        raise CvGenerationProviderError("CV provider returned an unexpected response shape") from exc
-    content = str(content).strip()
-    if not content:
-        raise CvGenerationProviderError("CV provider returned empty content")
-    return content + "\n"
-
-
-async def _post_and_extract_anthropic_message(
-    *,
-    endpoint: str,
-    headers: dict[str, str],
-    payload: dict[str, Any],
-    timeout_seconds: int,
-    provider: str,
-    model: str,
-) -> str:
-    response = await _post_json(
-        endpoint=endpoint,
-        headers=headers,
-        payload=payload,
-        timeout_seconds=timeout_seconds,
-        provider=provider,
-        model=model,
-    )
-    data = response.json()
-    try:
-        parts = data["content"]
-    except (KeyError, TypeError) as exc:
-        raise CvGenerationProviderError("Anthropic provider returned an unexpected response shape") from exc
-    texts: list[str] = []
-    if isinstance(parts, list):
-        for part in parts:
-            if isinstance(part, dict) and part.get("type") == "text" and part.get("text"):
-                texts.append(str(part["text"]))
-    content = "".join(texts).strip()
-    if not content:
-        raise CvGenerationProviderError("CV provider returned empty content")
-    return content + "\n"
-
-
 async def generate_targeted_cv(
     *,
     profile_json_path: Path,
@@ -243,19 +54,12 @@ async def generate_targeted_cv(
     match = score_job(job, profile_index)
     matched_capabilities = _matched_capabilities(profile, job, match)
     prompt = _build_prompt(profile=profile, job=job, match=match, matched_capabilities=matched_capabilities, language=language)
-    resolved_api_key = get_llm_api_key(api_key, provider=provider)
-    resolved_provider = get_llm_provider(provider)
-    requested_model = get_llm_model(model, provider=resolved_provider)
-    default_model = get_llm_default_model(resolved_provider)
-    resolved_model = requested_model
-    resolved_base_url = get_llm_base_url(base_url, provider=resolved_provider)
     logger.info(
-        "cv generation resolved llm config",
+        "cv generation prompt built",
         extra={
-            "provider": resolved_provider,
-            "requested_model": requested_model,
-            "default_model": default_model,
-            "base_url": resolved_base_url,
+            "provider": provider,
+            "model_supplied": bool(model),
+            "base_url_supplied": bool(base_url),
             "language": language,
             "company": job.company,
             "title": job.title,
@@ -263,50 +67,23 @@ async def generate_targeted_cv(
             "matched_skill_count": len(match.matched_skills),
         },
     )
-    llm_provider = _build_provider(
-        provider=resolved_provider,
-        api_key=resolved_api_key,
-        model=resolved_model,
-        base_url=resolved_base_url,
-    )
     try:
-        markdown = await llm_provider.generate_markdown(prompt=prompt)
-    except CvGenerationProviderError as exc:
-        if resolved_model != default_model and exc.status_code in {400, 404, 422}:
-            logger.warning(
-                "cv generation falling back to default model",
-                extra={
-                    "provider": resolved_provider,
-                    "requested_model": resolved_model,
-                    "fallback_model": default_model,
-                    "status_code": exc.status_code,
-                    "error": str(exc),
-                },
-            )
-            fallback_provider = _build_provider(
-                provider=resolved_provider,
-                api_key=resolved_api_key,
-                model=default_model,
-                base_url=resolved_base_url,
-            )
-            markdown = await fallback_provider.generate_markdown(prompt=prompt)
-            resolved_model = default_model
-        else:
-            logger.warning(
-                "cv generation provider failed without fallback",
-                extra={
-                    "provider": resolved_provider,
-                    "model": resolved_model,
-                    "default_model": default_model,
-                    "status_code": exc.status_code,
-                    "error": str(exc),
-                },
-            )
-            raise
+        llm_result = await LlmGenerationService().generate_text(
+            system_prompt=_cv_system_prompt(),
+            prompt=prompt,
+            provider=provider,
+            model=model,
+            base_url=base_url,
+            api_key=api_key,
+            temperature=0.2,
+            max_tokens=2000,
+        )
+    except LlmGenerationProviderError as exc:
+        raise CvGenerationProviderError(str(exc), status_code=exc.status_code) from exc
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / f"cv_{_slug(job.company)}_{_slug(job.title)}_{uuid.uuid4().hex[:8]}.md"
-    path.write_text(markdown, encoding="utf-8")
-    return GeneratedCv(markdown=markdown, path=path, matched_capabilities=matched_capabilities, provider=resolved_provider, model=resolved_model)
+    path.write_text(llm_result.text, encoding="utf-8")
+    return GeneratedCv(markdown=llm_result.text, path=path, matched_capabilities=matched_capabilities, provider=llm_result.provider, model=llm_result.model)
 
 
 def _profile_index_from_raw(profile: dict[str, Any]):

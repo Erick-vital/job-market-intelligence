@@ -10,7 +10,7 @@ from app.main import app
 from app.models.job_matching import JobPosting
 from app.routes import api as api_route
 from app.routes import web as web_route
-from app.services import cv_generation
+from app.services import llm_generation
 from app.services.cv_generation import generate_targeted_cv
 from app.services.job_matching import JobMatchingService
 from app.services.profile_generation import ProfileGenerationService
@@ -38,7 +38,7 @@ def _profile_service(tmp_path):
         skill_taxonomy_path=tmp_path / "items" / "profile" / "skill_taxonomy.yaml",
         min_score=0.42,
     )
-    return ProfileGenerationService(settings=settings)
+    return ProfileGenerationService(settings=settings, use_llm=False)
 
 
 def _fake_repo(tmp_path):
@@ -278,7 +278,7 @@ def test_generate_profile_htmx_form_from_local_repo(tmp_path):
 
 def test_generate_cv_api_returns_model_markdown_and_saves_file(tmp_path, monkeypatch):
     FakeAsyncClient.calls = []
-    monkeypatch.setattr(cv_generation.httpx, "AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr(llm_generation.httpx, "AsyncClient", FakeAsyncClient)
     monkeypatch.setenv("JMI_LLM_API_KEY", "sk-test-secret")
     app.dependency_overrides[api_route.get_job_matching_service] = lambda: _service(tmp_path)
     response = TestClient(app).post(
@@ -327,7 +327,7 @@ def test_generate_cv_api_requires_llm_api_key(tmp_path, monkeypatch):
 
 def test_generate_targeted_cv_accepts_legacy_openai_api_key_env(tmp_path, monkeypatch):
     FakeAsyncClient.calls = []
-    monkeypatch.setattr(cv_generation.httpx, "AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr(llm_generation.httpx, "AsyncClient", FakeAsyncClient)
     monkeypatch.delenv("JMI_LLM_API_KEY", raising=False)
     monkeypatch.setenv("JMI_OPENAI_API_KEY", "sk-legacy-secret")
     job = JobPosting(
@@ -356,7 +356,7 @@ def test_generate_targeted_cv_accepts_legacy_openai_api_key_env(tmp_path, monkey
 
 def test_generate_targeted_cv_uses_env_model_and_base_url_defaults(tmp_path, monkeypatch):
     FakeAsyncClient.calls = []
-    monkeypatch.setattr(cv_generation.httpx, "AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr(llm_generation.httpx, "AsyncClient", FakeAsyncClient)
     monkeypatch.setenv("JMI_LLM_API_KEY", "sk-test-secret")
     monkeypatch.setenv("JMI_LLM_MODEL", "gpt-env-model")
     monkeypatch.setenv("JMI_LLM_BASE_URL", "https://example-provider.test/v1")
@@ -397,7 +397,7 @@ def test_anthropic_model_aliases_match_api_ids(monkeypatch):
 
 def test_generate_targeted_cv_supports_anthropic_without_base_url(tmp_path, monkeypatch):
     FakeAnthropicAsyncClient.calls = []
-    monkeypatch.setattr(cv_generation.httpx, "AsyncClient", FakeAnthropicAsyncClient)
+    monkeypatch.setattr(llm_generation.httpx, "AsyncClient", FakeAnthropicAsyncClient)
     monkeypatch.setenv("JMI_LLM_API_KEY", "sk-ant-test-secret")
     job = JobPosting(
         company="Acme",
@@ -428,7 +428,7 @@ def test_generate_targeted_cv_supports_anthropic_without_base_url(tmp_path, monk
 
 def test_generate_targeted_cv_falls_back_to_default_model_when_requested_alias_fails(tmp_path, monkeypatch):
     FallbackAnthropicAsyncClient.calls = []
-    monkeypatch.setattr(cv_generation.httpx, "AsyncClient", FallbackAnthropicAsyncClient)
+    monkeypatch.setattr(llm_generation.httpx, "AsyncClient", FallbackAnthropicAsyncClient)
     monkeypatch.setenv("JMI_ANTHROPIC_API_KEY", "sk-ant-test-secret")
     monkeypatch.setenv("JMI_LLM_PROVIDER", "anthropic")
     monkeypatch.setenv("JMI_LLM_MODEL", "not-a-real-model")
@@ -462,7 +462,7 @@ def test_generate_targeted_cv_falls_back_to_default_model_when_requested_alias_f
 
 def test_generate_cv_htmx_form_returns_model_markdown(tmp_path, monkeypatch):
     FakeAnthropicAsyncClient.calls = []
-    monkeypatch.setattr(cv_generation.httpx, "AsyncClient", FakeAnthropicAsyncClient)
+    monkeypatch.setattr(llm_generation.httpx, "AsyncClient", FakeAnthropicAsyncClient)
     monkeypatch.setenv("JMI_LLM_API_KEY", "sk-test-secret")
     app.dependency_overrides[web_route.get_job_matching_service] = lambda: _service(tmp_path)
     response = TestClient(app).post(

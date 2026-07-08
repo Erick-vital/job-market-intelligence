@@ -99,7 +99,7 @@ async def generate_profile_ui(
                 "append_evidence": append_evidence,
             }
         )
-        result = service.generate_profile(payload)
+        result = await service.generate_profile(payload)
     except ValueError as exc:
         return templates.TemplateResponse(request=request, name="partials/error.html", context={"error": str(exc)}, status_code=400)
     profile = load_profile_snapshot(service.settings.profile_json_path)

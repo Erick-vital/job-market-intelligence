@@ -8,7 +8,7 @@ from pathlib import Path
 from app.schemas.profile_generation import ProfileGenerateRepoSummary, ProfileGenerateRequest, ProfileGenerateResponse
 from app.services.profile_evidence import RepoEvidenceRow, analyze_public_repos, analyze_repo_for_evidence, resolve_local_repo_source
 from app.services.settings import JobMatchingSettings, get_job_matching_settings
-from app.services.technical_profile_generation import generate_technical_profile
+from app.services.technical_profile_generation import generate_technical_profile, generate_technical_profile_with_skill
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +16,9 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ProfileGenerationService:
     settings: JobMatchingSettings
+    use_llm: bool = True
 
-    def generate_profile(self, request: ProfileGenerateRequest) -> ProfileGenerateResponse:
+    async def generate_profile(self, request: ProfileGenerateRequest) -> ProfileGenerateResponse:
         logger.info(
             "profile generation requested",
             extra={"public_repo_url_count": len(request.public_repo_urls), "local_repo_path_count": len(request.local_repo_paths)},
@@ -64,7 +65,10 @@ class ProfileGenerationService:
 
         evidence_path = self.settings.profile_json_path.parent / "repo_evidence.jsonl"
         written_count = _write_evidence_rows(evidence_path=evidence_path, rows=evidence_rows, append=request.append_evidence)
-        profile_result = generate_technical_profile(evidence_path=evidence_path, output_path=self.settings.profile_json_path)
+        if self.use_llm:
+            profile_result = await generate_technical_profile_with_skill(evidence_path=evidence_path, output_path=self.settings.profile_json_path)
+        else:
+            profile_result = generate_technical_profile(evidence_path=evidence_path, output_path=self.settings.profile_json_path)
         repos_analyzed = sum(1 for item in repo_results if item.status == "completed")
         status = "completed" if repos_analyzed else "failed"
         logger.info(
@@ -75,6 +79,10 @@ class ProfileGenerationService:
                 "evidence_rows_written": written_count,
                 "technical_profile_path": str(profile_result.output_path),
                 "evidence_path": str(evidence_path),
+                "technical_profile_generation_mode": profile_result.generation_mode,
+                "technical_profile_llm_provider": profile_result.llm_provider,
+                "technical_profile_llm_model": profile_result.llm_model,
+                "technical_profile_llm_fallback_reason": profile_result.llm_fallback_reason,
             },
         )
         return ProfileGenerateResponse(
