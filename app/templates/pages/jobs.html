@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Analizar jobs · Job Market Intelligence{% endblock %}
+
+{% block content %}
+  <section id="batch-analysis" class="card">
+    <p class="eyebrow">Batch analysis</p>
+    <h2>Analyze jobs from CSV or JSONL</h2>
+    <p class="muted">Upload exported job postings and get ranked matches, demanded skills, gaps, company signals, and a Markdown report.</p>
+    <form hx-post="/ui/jobs/import" hx-target="#results" hx-swap="innerHTML" enctype="multipart/form-data" hx-on::before-request="document.getElementById('batch-match-status').textContent='Generando match…'; document.getElementById('batch-match-status').className='profile-status is-loading';" hx-on::after-request="document.getElementById('batch-match-status').textContent = event.detail.successful ? 'El match fue generado.' : 'No se pudo generar el match.'; document.getElementById('batch-match-status').className = event.detail.successful ? 'profile-status is-success' : 'profile-status';">
+      <label>CSV or JSONL file
+        <input type="file" name="file" accept=".csv,.jsonl,.ndjson" required />
+      </label>
+      <div class="grid-two">
+        <label>Max matches
+          <input type="number" name="max_matches" min="1" max="50" value="8" />
+        </label>
+        <label>Min score
+          <input type="number" name="min_score" min="0" max="1" step="0.01" placeholder="0.42" />
+        </label>
+      </div>
+      <div class="profile-action-row">
+        <button type="submit">Run batch analysis</button>
+        <span id="batch-match-status" class="profile-status" role="status" aria-live="polite"></span>
+      </div>
+    </form>
+  </section>
+
+  <section id="manual-match" class="card">
+    <p class="eyebrow">Manual match</p>
+    <h2>Compare one job manually</h2>
+    <p class="muted">Paste a single job description when you want a quick one-by-one fit check without preparing a CSV.</p>
+    <form hx-post="/ui/jobs/match" hx-target="#results" hx-swap="innerHTML" hx-on::before-request="document.getElementById('manual-match-status').textContent='Generando match…'; document.getElementById('manual-match-status').className='profile-status is-loading';" hx-on::after-request="document.getElementById('manual-match-status').textContent = event.detail.successful ? 'El match fue generado.' : 'No se pudo generar el match.'; document.getElementById('manual-match-status').className = event.detail.successful ? 'profile-status is-success' : 'profile-status';">
+      <div class="grid-two">
+        <label>Company
+          <input type="text" name="company" placeholder="Acme" required />
+        </label>
+        <label>Job title
+          <input type="text" name="title" placeholder="Backend Python Engineer" required />
+        </label>
+      </div>
+      <label>Job description
+        <textarea name="description" rows="9" placeholder="Paste the job description here" required></textarea>
+      </label>
+      <div class="grid-two">
+        <label>Location optional
+          <input type="text" name="location" placeholder="Remote Mexico" />
+        </label>
+        <label>Source URL optional
+          <input type="url" name="source_url" placeholder="https://..." />
+        </label>
+      </div>
+      <div class="profile-action-row">
+        <button type="submit">Run manual match</button>
+        <span id="manual-match-status" class="profile-status" role="status" aria-live="polite"></span>
+      </div>
+    </form>
+  </section>
+
+  <section id="results"></section>
+{% endblock %}

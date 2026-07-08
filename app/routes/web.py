@@ -30,9 +30,24 @@ def get_profile_generation_service() -> ProfileGenerationService:
 
 @router.get("/", response_class=HTMLResponse)
 def home(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request=request, name="pages/home.html")
+
+
+@router.get("/jobs", response_class=HTMLResponse)
+def jobs_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request=request, name="pages/jobs.html")
+
+
+@router.get("/profile", response_class=HTMLResponse)
+def profile_page(request: Request) -> HTMLResponse:
     settings = get_job_matching_settings()
     profile = load_profile_snapshot(settings.profile_json_path)
-    return templates.TemplateResponse(request=request, name="index.html", context={"profile": profile})
+    return templates.TemplateResponse(request=request, name="pages/profile.html", context={"profile": profile})
+
+
+@router.get("/cv", response_class=HTMLResponse)
+def cv_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request=request, name="pages/cv.html")
 
 
 @router.post("/ui/jobs/import", response_class=HTMLResponse)

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}Job Market Intelligence{% endblock %}</title>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body hx-boost="true">
+    <main class="shell">
+      <nav class="menu" aria-label="Primary">
+        {% set nav_items = [
+          ("/", "Inicio"),
+          ("/jobs", "Analizar jobs"),
+          ("/profile", "Perfil técnico"),
+          ("/cv", "Generar CV"),
+        ] %}
+        {% for path, label in nav_items %}
+          <a href="{{ path }}"{% if request.url.path == path %} class="active" aria-current="page"{% endif %}>{{ label }}</a>
+        {% endfor %}
+      </nav>
+
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>

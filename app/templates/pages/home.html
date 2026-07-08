@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="hero">
+    <p class="eyebrow">Open-source · local-first</p>
+    <h1>Turn job postings into market intelligence.</h1>
+    <p class="lead">Define a canonical technical profile once, then use it to evaluate job postings, understand demand, detect gaps, and generate targeted application material.</p>
+  </section>
+
+  <section class="card">
+    <p class="eyebrow">Cómo funciona</p>
+    <h2>Perfil → Matching → Reporte / CV</h2>
+    <div class="columns">
+      <section>
+        <h3><a href="/jobs">Analizar jobs</a></h3>
+        <p class="muted">Sube un CSV/JSONL exportado o pega una vacante individual para obtener matches rankeados, skills demandadas, gaps y señales por empresa.</p>
+      </section>
+      <section>
+        <h3><a href="/profile">Perfil técnico</a></h3>
+        <p class="muted">El perfil canónico respaldado por evidencia es la fuente de verdad del matching. Genéralo desde tus repos y revísalo aquí.</p>
+      </section>
+    </div>
+    <div class="columns">
+      <section>
+        <h3><a href="/cv">Generar CV</a></h3>
+        <p class="muted">Crea un borrador de CV dirigido en Markdown, respaldado por el perfil y el contexto determinístico del match.</p>
+      </section>
+      <section>
+        <h3>Extensión de LinkedIn</h3>
+        <p class="muted">Captura vacantes manualmente durante tu sesión y expórtalas como CSV/JSONL. Ver <code>browser_extensions/linkedin_jobs_capture</code>.</p>
+      </section>
+    </div>
+  </section>
+{% endblock %}

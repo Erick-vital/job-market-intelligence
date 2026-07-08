@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Generar CV · Job Market Intelligence{% endblock %}
+
+{% block content %}
+  <section id="cv-generator" class="card">
+    <p class="eyebrow">Generate CV</p>
+    <h2>Create a local targeted CV draft</h2>
+    <p class="muted">The model uses the canonical profile, deterministic match context, and the pasted job to draft a stronger Markdown CV. Configure your local LLM API key in <code>.env</code> with <code>JMI_LLM_API_KEY</code>. You can also set a default provider/model there with <code>JMI_LLM_PROVIDER</code> and <code>JMI_LLM_MODEL</code>. Base URL is optional and only needed for custom gateways.</p>
+    <form hx-post="/ui/cv/generate" hx-target="#results" hx-swap="innerHTML">
+      <div class="grid-two">
+        <label>Company
+          <input type="text" name="company" placeholder="Acme" required />
+        </label>
+        <label>Job title
+          <input type="text" name="title" placeholder="Backend Python Engineer" required />
+        </label>
+      </div>
+      <label>Job description
+        <textarea name="description" rows="9" placeholder="Paste the target job description here" required></textarea>
+      </label>
+      <div class="grid-two">
+        <label>Provider
+          <select name="provider">
+            <option value="openai_compatible">OpenAI-compatible</option>
+            <option value="anthropic">Anthropic</option>
+          </select>
+        </label>
+        <label>Model (optional)
+          <input type="text" name="model" value="" placeholder="Leave blank to use the provider default" />
+        </label>
+      </div>
+      <label>Base URL (optional)
+        <input type="url" name="base_url" value="" placeholder="Custom gateway URL if needed" />
+      </label>
+      <div class="grid-two">
+        <label>Language
+          <select name="language">
+            <option value="en">English</option>
+            <option value="es">Español</option>
+          </select>
+        </label>
+      </div>
+      <label>Location optional
+        <input type="text" name="location" placeholder="Remote Mexico" />
+      </label>
+      <button type="submit">Generate CV draft with model</button>
+    </form>
+  </section>
+
+  <section id="results"></section>
+{% endblock %}

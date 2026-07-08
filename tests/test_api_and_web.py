@@ -182,18 +182,37 @@ def test_import_jobs_api_persists_and_returns_report(tmp_path):
     assert Path(body["paths"]["report_markdown"]).exists()
 
 
-def test_home_page_and_htmx_upload(tmp_path):
-    app.dependency_overrides[web_route.get_job_matching_service] = lambda: _service(tmp_path)
+def test_pages_render_with_active_menu():
     client = TestClient(app)
+
     home = client.get("/")
     assert home.status_code == 200
     assert "Turn job postings into market intelligence" in home.text
-    assert "Manual match" in home.text
-    assert "Generate CV" in home.text
-    assert "Actualizar perfil" in home.text
-    assert "Rutas locales" in home.text
-    assert "Perfil" in home.text
-    assert "Backend Python API Design" in home.text
+    for path in ("/jobs", "/profile", "/cv"):
+        assert f'href="{path}"' in home.text
+
+    jobs = client.get("/jobs")
+    assert jobs.status_code == 200
+    assert "Manual match" in jobs.text
+    assert "Run batch analysis" in jobs.text
+    assert '<a href="/jobs" class="active" aria-current="page">' in jobs.text
+
+    profile = client.get("/profile")
+    assert profile.status_code == 200
+    assert "Actualizar perfil" in profile.text
+    assert "Rutas locales" in profile.text
+    assert "Backend Python API Design" in profile.text
+    assert '<a href="/profile" class="active" aria-current="page">' in profile.text
+
+    cv = client.get("/cv")
+    assert cv.status_code == 200
+    assert "Generate CV" in cv.text
+    assert '<a href="/cv" class="active" aria-current="page">' in cv.text
+
+
+def test_htmx_upload_from_jobs_page(tmp_path):
+    app.dependency_overrides[web_route.get_job_matching_service] = lambda: _service(tmp_path)
+    client = TestClient(app)
     csv_text = (
         "source_job_id,title,company,description\n"
         "1,Backend Python Engineer,Acme,Python FastAPI REST APIs AWS Lambda SQLite\n"
