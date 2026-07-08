@@ -1,0 +1,70 @@
+categories:
+  core:
+    skills:
+    - Python
+    - FastAPI
+    - REST APIs
+    - SQLite
+    - pytest
+    - CLI automation
+    - AWS
+    - Lambda
+    - S3
+  declared_expansion:
+    skills:
+    - Pydantic
+    - Docker
+    - CI/CD
+    - HTMX
+    - Jinja2
+    - JavaScript
+    - HTML
+    - CSS
+    - Browser Extensions
+    - Terraform
+    - Kubernetes
+    - React
+    - GraphQL
+    - Java
+    - .NET
+    - Go
+matching:
+  title_terms:
+  - backend
+  - python
+  - api
+  - automation
+  - data
+  - cloud
+  - serverless
+  - platform
+  - sre
+  gap_skills:
+  - Kubernetes
+  - React
+  - Terraform
+  - Java
+  - .NET
+  - Go
+  - GraphQL
+  negative_terms:
+  - frontend-only
+  - frontend only
+  - mobile ui
+  - react css
+  - android
+  - ios
+  location_terms:
+  - remote
+  - remoto
+  - mexico
+  - méxico
+  - cdmx
+  aliases:
+    REST APIs:
+    - rest
+    - restful
+    Python:
+    - python3
+    S3:
+    - amazon s3

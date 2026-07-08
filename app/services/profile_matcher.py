@@ -10,49 +10,16 @@ from typing import Any
 import yaml
 
 from app.models.job_matching import JobMatchResult, JobPosting
+from app.services.profile_taxonomy import build_skill_taxonomy, unique
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_TAXONOMY = {
-    "categories": {
-        "core": {
-            "skills": [
-                "Python",
-                "FastAPI",
-                "REST APIs",
-                "SQLite",
-                "pytest",
-                "CLI automation",
-                "AWS",
-                "Lambda",
-                "S3",
-            ]
-        },
-        "declared_expansion": {
-            "skills": [
-                "Pydantic",
-                "JSONL",
-                "Docker",
-                "CI/CD",
-                "HTMX",
-                "Jinja2",
-                "JavaScript",
-                "HTML",
-                "CSS",
-                "Browser Extensions",
-                "Terraform",
-                "Kubernetes",
-                "React",
-                "GraphQL",
-                "Java",
-                ".NET",
-                "Go",
-            ]
-        },
-    }
-}
-
-EXTRA_ALIASES = {
+# Generic fallbacks used when the taxonomy YAML has no `matching:` section.
+# Profile-specific values (preferred title terms, gap skills, location terms,
+# negative terms) belong in the taxonomy file next to the canonical profile.
+DEFAULT_TITLE_TERMS = ["backend", "api", "automation", "data", "cloud", "platform", "engineer", "developer"]
+DEFAULT_LOCATION_TERMS = ["remote", "remoto"]
+DEFAULT_ALIASES = {
     "REST APIs": ["rest", "restful"],
     "JSONL artifacts": ["ndjson"],
     "LLM integration": ["large language model", "ai agent", "agentic"],
@@ -60,9 +27,14 @@ EXTRA_ALIASES = {
     "S3": ["amazon s3"],
 }
 
-NEGATIVE_TERMS = ["frontend-only", "frontend only", "mobile ui", "react css", "android", "ios"]
-TITLE_TERMS = ["backend", "python", "api", "automation", "data", "cloud", "serverless", "platform", "sre"]
-GAP_SKILLS = ["Kubernetes", "React", "Terraform", "Java", ".NET", "Go", "GraphQL"]
+
+@dataclass(frozen=True)
+class MatcherConfig:
+    title_terms: list[str] = field(default_factory=lambda: list(DEFAULT_TITLE_TERMS))
+    gap_skills: list[str] = field(default_factory=list)
+    negative_terms: list[str] = field(default_factory=list)
+    location_terms: list[str] = field(default_factory=lambda: list(DEFAULT_LOCATION_TERMS))
+    extra_aliases: dict[str, list[str]] = field(default_factory=lambda: dict(DEFAULT_ALIASES))
 
 
 @dataclass(frozen=True)
@@ -78,39 +50,68 @@ class ProfileIndex:
     skills: list[SkillEntry]
     capability_terms: set[str]
     summary: str
+    config: MatcherConfig = field(default_factory=MatcherConfig)
 
 
-def _read_taxonomy(taxonomy_yaml_path: Path) -> dict[str, Any]:
+def _read_taxonomy(taxonomy_yaml_path: Path | None, profile: dict[str, Any]) -> dict[str, Any]:
+    fallback = build_skill_taxonomy(profile)
+    if taxonomy_yaml_path is None:
+        return fallback
     try:
         if not taxonomy_yaml_path.exists():
             logger.warning(
-                "skill taxonomy file missing; using built-in default taxonomy",
+                "skill taxonomy file missing; deriving taxonomy from profile capabilities",
                 extra={"taxonomy_path": str(taxonomy_yaml_path)},
             )
-            return DEFAULT_TAXONOMY
+            return fallback
         loaded = yaml.safe_load(taxonomy_yaml_path.read_text(encoding="utf-8")) or {}
         if not isinstance(loaded, dict):
             raise TypeError("taxonomy YAML must load as a mapping")
         return loaded
     except Exception as exc:
         logger.warning(
-            "skill taxonomy file invalid; using built-in default taxonomy",
+            "skill taxonomy file invalid; deriving taxonomy from profile capabilities",
             extra={"taxonomy_path": str(taxonomy_yaml_path), "error": str(exc)},
         )
-        return DEFAULT_TAXONOMY
+        return fallback
 
 
-def load_profile(profile_json_path: Path, taxonomy_yaml_path: Path) -> ProfileIndex:
+def _matcher_config(taxonomy: dict[str, Any]) -> MatcherConfig:
+    matching = taxonomy.get("matching")
+    if not isinstance(matching, dict):
+        return MatcherConfig()
+    aliases = dict(DEFAULT_ALIASES)
+    raw_aliases = matching.get("aliases")
+    if isinstance(raw_aliases, dict):
+        for name, values in raw_aliases.items():
+            aliases[str(name)] = [str(value) for value in values or []]
+    return MatcherConfig(
+        title_terms=_str_list(matching.get("title_terms"), DEFAULT_TITLE_TERMS),
+        gap_skills=_str_list(matching.get("gap_skills"), []),
+        negative_terms=_str_list(matching.get("negative_terms"), []),
+        location_terms=_str_list(matching.get("location_terms"), DEFAULT_LOCATION_TERMS),
+        extra_aliases=aliases,
+    )
+
+
+def _str_list(value: Any, default: list[str]) -> list[str]:
+    if not isinstance(value, list):
+        return list(default)
+    return [str(item) for item in value if str(item).strip()]
+
+
+def load_profile(profile_json_path: Path, taxonomy_yaml_path: Path | None = None) -> ProfileIndex:
     profile = json.loads(profile_json_path.read_text(encoding="utf-8"))
-    taxonomy = _read_taxonomy(taxonomy_yaml_path)
+    taxonomy = _read_taxonomy(taxonomy_yaml_path, profile)
+    config = _matcher_config(taxonomy)
     capability_weights = _capability_skill_weights(profile)
     skills: list[SkillEntry] = []
     for category, data in (taxonomy.get("categories") or {}).items():
         category_weight = 0.45 if str(category).startswith("declared_") else 1.0
         for name in data.get("skills") or []:
             name = str(name)
-            weight = capability_weights.get(_norm(name), 0.75) * category_weight
-            skills.append(SkillEntry(name=name, category=category, aliases=_aliases_for(name), weight=weight))
+            weight = capability_weights.get(searchable(name), 0.75) * category_weight
+            skills.append(SkillEntry(name=name, category=category, aliases=_aliases_for(name, config.extra_aliases), weight=weight))
 
     terms: set[str] = set()
     summaries: list[str] = []
@@ -119,13 +120,14 @@ def load_profile(profile_json_path: Path, taxonomy_yaml_path: Path) -> ProfileIn
         summaries.append(f"{cap.get('name')}: {summary}")
         for token in _meaningful_tokens(" ".join([str(cap.get("name") or ""), summary])):
             terms.add(token)
-    return ProfileIndex(skills=skills, capability_terms=terms, summary="\n".join(summaries[:10]))
+    return ProfileIndex(skills=skills, capability_terms=terms, summary="\n".join(summaries[:10]), config=config)
 
 
 def score_job(job: JobPosting, profile: ProfileIndex) -> JobMatchResult:
+    config = profile.config
     raw_text = job.matching_text()
-    text = _searchable(raw_text)
-    title = _searchable(job.title)
+    text = searchable(raw_text)
+    title = searchable(job.title)
 
     matched: list[SkillEntry] = []
     for skill in profile.skills:
@@ -138,18 +140,14 @@ def score_job(job: JobPosting, profile: ProfileIndex) -> JobMatchResult:
 
     job_terms = set(_meaningful_tokens(raw_text))
     capability_alignment = min(1.0, len(job_terms & profile.capability_terms) / 12.0)
-    title_alignment = min(1.0, sum(1 for term in TITLE_TERMS if term in title) / 3.0)
-    location_bonus = 1.0 if any(term in _searchable(job.location) for term in ["remote", "remoto", "mexico", "méxico", "cdmx"]) else 0.0
-    negative_penalty = 0.0
-    if any(term in text for term in NEGATIVE_TERMS):
-        negative_penalty = 0.25
-    if "frontend" in title and not any(term in text for term in ["python", "backend", "api"]):
-        negative_penalty = max(negative_penalty, 0.30)
+    title_alignment = min(1.0, sum(1 for term in config.title_terms if term in title) / 3.0)
+    location_bonus = 1.0 if any(term in searchable(job.location) for term in config.location_terms) else 0.0
+    negative_penalty = 0.25 if any(term in text for term in (searchable(t) for t in config.negative_terms)) else 0.0
 
     score = (skill_overlap * 0.60) + (capability_alignment * 0.25) + (title_alignment * 0.12) + (location_bonus * 0.05) - negative_penalty
     score = max(0.0, min(1.0, score))
-    matched_names = _unique([skill.name for skill in sorted(matched, key=lambda item: item.weight, reverse=True)])[:12]
-    missing = [skill for skill in GAP_SKILLS if _contains_alias(text, _searchable(skill)) and skill not in matched_names][:6]
+    matched_names = unique([skill.name for skill in sorted(matched, key=lambda item: item.weight, reverse=True)])[:12]
+    missing = [skill for skill in config.gap_skills if _contains_alias(text, searchable(skill)) and skill not in matched_names][:6]
     reasons = _reasons(job, matched_names, title_alignment, missing)
     return JobMatchResult(
         job=job,
@@ -188,18 +186,18 @@ def _capability_skill_weights(profile: dict[str, Any]) -> dict[str, float]:
         if "declared" in str(cap.get("evidence_type") or "").lower():
             base *= 0.55
         for skill in cap.get("skills") or []:
-            weights[_norm(str(skill))] = max(weights.get(_norm(str(skill)), 0.0), base)
+            weights[searchable(str(skill))] = max(weights.get(searchable(str(skill)), 0.0), base)
     return weights
 
 
-def _aliases_for(name: str) -> list[str]:
-    aliases = {_searchable(name)}
-    aliases.add(_searchable(name.replace("-", " ")))
+def _aliases_for(name: str, extra_aliases: dict[str, list[str]]) -> list[str]:
+    aliases = {searchable(name)}
+    aliases.add(searchable(name.replace("-", " ")))
     if name.endswith("s"):
-        aliases.add(_searchable(name[:-1]))
+        aliases.add(searchable(name[:-1]))
     compact = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", name)
-    aliases.add(_searchable(compact))
-    aliases.update(_searchable(alias) for alias in EXTRA_ALIASES.get(name, []))
+    aliases.add(searchable(compact))
+    aliases.update(searchable(alias) for alias in extra_aliases.get(name, []))
     return sorted(alias for alias in aliases if alias)
 
 
@@ -216,7 +214,7 @@ def _reasons(job: JobPosting, matched: list[str], title_alignment: float, missin
     if matched:
         reasons.append("Mentions profile-aligned skills: " + ", ".join(matched[:5]) + ".")
     if title_alignment > 0:
-        reasons.append("The title or responsibilities appear aligned with backend, APIs, automation, data, or cloud work.")
+        reasons.append("The title or responsibilities appear aligned with the profile's preferred role focus.")
     if missing:
         reasons.append("Potential gap or caution: " + ", ".join(missing[:4]) + ".")
     if not reasons:
@@ -234,27 +232,13 @@ def _fit_level(score: float) -> str:
     return "none"
 
 
-def _searchable(value: str) -> str:
+def searchable(value: str) -> str:
     value = str(value or "").lower()
     value = value.replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u")
     value = re.sub(r"[^a-z0-9+#.]+", " ", value)
     return re.sub(r"\s+", " ", value).strip()
 
 
-def _norm(value: str) -> str:
-    return _searchable(value)
-
-
 def _meaningful_tokens(value: str) -> list[str]:
-    stop = {"with", "and", "the", "for", "de", "con", "para", "los", "las", "and", "or", "a", "to", "of", "in"}
-    return [token for token in _searchable(value).split() if len(token) >= 4 and token not in stop]
-
-
-def _unique(values: list[str]) -> list[str]:
-    seen = set()
-    output = []
-    for value in values:
-        if value not in seen:
-            seen.add(value)
-            output.append(value)
-    return output
+    stop = {"with", "and", "the", "for", "de", "con", "para", "los", "las", "or", "a", "to", "of", "in"}
+    return [token for token in searchable(value).split() if len(token) >= 4 and token not in stop]

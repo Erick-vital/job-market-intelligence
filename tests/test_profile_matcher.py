@@ -6,9 +6,9 @@ from pathlib import Path
 from app.services.job_file_parser import parse_job_file
 from app.services.profile_matcher import load_profile, rank_matches, score_job
 
-ROOT = Path(__file__).resolve().parents[1]
-PROFILE = ROOT / "items/profile/technical_experience.json"
-TAXONOMY = ROOT / "items/profile/skill_taxonomy.yaml"
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+PROFILE = FIXTURES / "technical_experience.json"
+TAXONOMY = FIXTURES / "skill_taxonomy.yaml"
 
 
 def _job(title: str, description: str):

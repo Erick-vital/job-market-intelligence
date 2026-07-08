@@ -69,6 +69,7 @@ class JobMatchingService:
         output_dir = self.settings.jobs_items_dir.parent / "cvs"
         cv = await generate_targeted_cv(
             profile_json_path=self.settings.profile_json_path,
+            taxonomy_yaml_path=self.settings.skill_taxonomy_path,
             output_dir=output_dir,
             job=job,
             api_key=api_key,

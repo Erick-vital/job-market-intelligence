@@ -11,7 +11,8 @@ from typing import Any
 
 from app.models.job_matching import JobMatchResult, JobPosting
 from app.services.llm_generation import LlmGenerationProviderError, LlmGenerationService
-from app.services.profile_matcher import _searchable, score_job
+from app.services.profile_matcher import load_profile, score_job, searchable
+from app.services.profile_taxonomy import unique
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,7 @@ async def generate_targeted_cv(
     profile_json_path: Path,
     output_dir: Path,
     job: JobPosting,
+    taxonomy_yaml_path: Path | None = None,
     api_key: str | None = None,
     language: str = "en",
     provider: str | None = None,
@@ -50,7 +52,7 @@ async def generate_targeted_cv(
     base_url: str | None = None,
 ) -> GeneratedCv:
     profile = json.loads(profile_json_path.read_text(encoding="utf-8"))
-    profile_index = _profile_index_from_raw(profile)
+    profile_index = load_profile(profile_json_path, taxonomy_yaml_path)
     match = score_job(job, profile_index)
     matched_capabilities = _matched_capabilities(profile, job, match)
     prompt = _build_prompt(profile=profile, job=job, match=match, matched_capabilities=matched_capabilities, language=language)
@@ -86,39 +88,14 @@ async def generate_targeted_cv(
     return GeneratedCv(markdown=llm_result.text, path=path, matched_capabilities=matched_capabilities, provider=llm_result.provider, model=llm_result.model)
 
 
-def _profile_index_from_raw(profile: dict[str, Any]):
-    from app.services.profile_matcher import ProfileIndex, SkillEntry
-
-    skills: list[SkillEntry] = []
-    terms: set[str] = set()
-    summaries: list[str] = []
-    for cap in profile.get("capabilities") or []:
-        level = str(cap.get("level") or "").lower()
-        confidence = str(cap.get("confidence") or "").lower()
-        weight = 1.0
-        if "strong" in level:
-            weight += 0.25
-        if "high" in confidence:
-            weight += 0.15
-        for skill in cap.get("skills") or []:
-            skill_name = str(skill)
-            skills.append(SkillEntry(name=skill_name, category=str(cap.get("id") or "profile"), aliases=[_searchable(skill_name)], weight=weight))
-        summary = str(cap.get("summary") or "")
-        summaries.append(f"{cap.get('name')}: {summary}")
-        for token in _searchable(" ".join([str(cap.get("name") or ""), summary])).split():
-            if len(token) >= 4:
-                terms.add(token)
-    return ProfileIndex(skills=skills, capability_terms=terms, summary="\n".join(summaries[:10]))
-
-
 def _matched_capabilities(profile: dict[str, Any], job: JobPosting, match: JobMatchResult) -> list[str]:
-    text = _searchable(job.matching_text())
-    matched_skill_names = {_searchable(skill) for skill in match.matched_skills}
+    text = searchable(job.matching_text())
+    matched_skill_names = {searchable(skill) for skill in match.matched_skills}
     scored: list[tuple[int, str]] = []
     for cap in profile.get("capabilities") or []:
-        cap_skills = {_searchable(str(skill)) for skill in cap.get("skills") or []}
+        cap_skills = {searchable(str(skill)) for skill in cap.get("skills") or []}
         skill_hits = len(cap_skills & matched_skill_names)
-        summary_hits = sum(1 for token in _searchable(str(cap.get("summary") or "")).split() if len(token) >= 4 and token in text)
+        summary_hits = sum(1 for token in searchable(str(cap.get("summary") or "")).split() if len(token) >= 4 and token in text)
         score = skill_hits * 3 + min(summary_hits, 3)
         if score > 0:
             scored.append((score, str(cap.get("name") or cap.get("id") or "Capability")))
@@ -176,25 +153,15 @@ def _build_prompt(
 
 
 def _cv_phrases_for_match(profile: dict[str, Any], match: JobMatchResult) -> list[str]:
-    matched = {_searchable(skill) for skill in match.matched_skills}
+    matched = {searchable(skill) for skill in match.matched_skills}
     phrases: list[str] = []
     for cap in profile.get("capabilities") or []:
-        cap_skills = {_searchable(str(skill)) for skill in cap.get("skills") or []}
+        cap_skills = {searchable(str(skill)) for skill in cap.get("skills") or []}
         if cap_skills & matched:
             phrases.extend(str(phrase) for phrase in cap.get("cv_phrases") or [] if str(phrase).strip())
-    return _unique(phrases)
+    return unique(phrases)
 
 
 def _slug(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", str(value or "item").lower()).strip("-")
     return slug[:40] or "item"
-
-
-def _unique(values: list[str]) -> list[str]:
-    seen: set[str] = set()
-    output: list[str] = []
-    for value in values:
-        if value not in seen:
-            seen.add(value)
-            output.append(value)
-    return output

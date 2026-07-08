@@ -50,7 +50,7 @@ class JobPosting:
             str(self.raw.get("detail_text") or ""),
             str(self.raw.get("card_text") or ""),
         ]
-        return "\\n".join(part for part in parts if part).strip()
+        return "\n".join(part for part in parts if part).strip()
 
     def dedupe_key(self) -> str:
         if self.source_job_id:

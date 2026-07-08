@@ -55,7 +55,7 @@ def report_to_markdown(report: dict[str, Any]) -> str:
     lines.extend(["", "## Recommended matches"])
     for item in report.get("recommended_matches", []):
         lines.append(f"- {item['fit_score']} · {item['title']} — {item['company']}")
-    return "\\n".join(lines) + "\\n"
+    return "\n".join(lines) + "\n"
 
 
 def _counter_items(counter: Counter[str], limit: int = 12) -> list[dict[str, Any]]:

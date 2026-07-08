@@ -212,6 +212,28 @@ Recommended profile workflow:
 4. Update `skill_taxonomy.yaml` when a relevant skill should be detected by the matcher.
 5. Re-run manual or batch matching to validate the profile.
 
+### Matcher tuning (`matching:` section)
+
+Profile-specific matcher behavior lives in `skill_taxonomy.yaml` under a `matching:` key, next to your skill categories:
+
+```yaml
+matching:
+  title_terms: [backend, python, api, automation, data, cloud]
+  gap_skills: [Kubernetes, React, Terraform]
+  negative_terms: [frontend-only, mobile ui]
+  location_terms: [remote, remoto, mexico, cdmx]
+  aliases:
+    REST APIs: [rest, restful]
+```
+
+- `title_terms` boost jobs whose title matches your preferred role focus.
+- `gap_skills` are skills you lack that should be flagged as cautions when a job requires them.
+- `negative_terms` apply a penalty when present in the posting.
+- `location_terms` grant a small bonus.
+- `aliases` add extra search aliases for a skill.
+
+The profile generator preserves this section when it regenerates the taxonomy, so your tuning survives profile updates.
+
 ### Generate the technical profile from repos
 
 From the web UI, use `Technical profile` -> `Actualizar perfil`.

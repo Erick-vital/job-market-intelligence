@@ -12,11 +12,10 @@ from app.schemas.job_matching import (
     ManualJobMatchResponse,
 )
 from app.schemas.profile_generation import ProfileGenerateRequest, ProfileGenerateResponse
+from app.routes.helpers import CvGenerationHttpError, generate_cv_for_request
 from app.services.job_file_parser import JobFileParseError
-from app.services.cv_generation import CvGenerationProviderError
 from app.services.job_matching import JobMatchingService, build_job_matching_service_from_env
 from app.services.profile_generation import ProfileGenerationService, build_profile_generation_service_from_env
-from app.services.settings import MissingLlmApiKeyError
 
 router = APIRouter(prefix="/api", tags=["job-intelligence"])
 logger = logging.getLogger(__name__)
@@ -94,39 +93,9 @@ async def generate_cv(
     service: JobMatchingService = Depends(get_job_matching_service),
 ) -> CvGenerateResponse:
     try:
-        logger.info(
-            "cv api generate requested",
-            extra={
-                "provider": payload.provider,
-                "model_supplied": bool(payload.model),
-                "base_url_supplied": bool(payload.base_url),
-                "language": payload.language,
-                "company": payload.company,
-                "title": payload.title,
-                "description_chars": len(payload.description),
-            },
-        )
-        generated = await service.generate_cv(
-            job=payload.to_job(),
-            api_key=payload.api_key,
-            language=payload.language,
-            provider=payload.provider,
-            model=payload.model,
-            base_url=payload.base_url,
-        )
-    except MissingLlmApiKeyError as exc:
-        logger.warning("cv api generate missing api key", extra={"provider": payload.provider, "error": str(exc)})
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except CvGenerationProviderError as exc:
-        logger.warning(
-            "cv api generate provider error",
-            extra={"provider": payload.provider, "model": payload.model, "status_code": exc.status_code, "error": str(exc)},
-        )
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    logger.info(
-        "cv api generate completed",
-        extra={"provider": generated.provider, "model": generated.model, "path": str(generated.path)},
-    )
+        generated = await generate_cv_for_request(service, payload, source="api")
+    except CvGenerationHttpError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return CvGenerateResponse(
         status="completed",
         markdown=generated.markdown,

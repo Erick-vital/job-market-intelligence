@@ -4,18 +4,14 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 ROOT_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_DATA_DIR = ROOT_DIR / "data"
 DEFAULT_ITEMS_DIR = ROOT_DIR / "items" / "jobs"
 DEFAULT_PROFILE_JSON_PATH = ROOT_DIR / "items" / "profile" / "technical_experience.json"
 DEFAULT_TAXONOMY_PATH = ROOT_DIR / "items" / "profile" / "skill_taxonomy.yaml"
 DEFAULT_ENV_PATH = ROOT_DIR / ".env"
-LLM_API_KEY_ENV_VAR = "JMI_LLM_API_KEY"
-LLM_PROVIDER_ENV_VAR = "JMI_LLM_PROVIDER"
-LLM_MODEL_ENV_VAR = "JMI_LLM_MODEL"
-LLM_BASE_URL_ENV_VAR = "JMI_LLM_BASE_URL"
-LEGACY_LLM_API_KEY_ENV_VAR = "JMI_OPENAI_API_KEY"
-ANTHROPIC_LLM_API_KEY_ENV_VAR = "JMI_ANTHROPIC_API_KEY"
 DEFAULT_LLM_PROVIDER = "openai_compatible"
 DEFAULT_LLM_MODEL_BY_PROVIDER = {
     "openai_compatible": "gpt-4o-mini",
@@ -51,21 +47,35 @@ class MissingLlmApiKeyError(RuntimeError):
     pass
 
 
-def _load_dotenv(path: Path = DEFAULT_ENV_PATH) -> None:
-    if not path.exists():
-        return
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        value = value.strip().strip('"').strip("'")
-        if key and key not in os.environ:
-            os.environ[key] = value
+class AppSettings(BaseSettings):
+    """All JMI_* configuration, sourced from the environment and the repo .env file."""
+
+    model_config = SettingsConfigDict(env_prefix="JMI_", extra="ignore")
+
+    data_dir: Path = DEFAULT_DATA_DIR
+    jobs_items_dir: Path = DEFAULT_ITEMS_DIR
+    profile_json_path: Path = DEFAULT_PROFILE_JSON_PATH
+    skill_taxonomy_path: Path = DEFAULT_TAXONOMY_PATH
+    min_score: float = 0.42
+
+    llm_provider: str = ""
+    llm_model: str = ""
+    llm_base_url: str = ""
+    llm_api_key: str = ""
+    openai_api_key: str = ""  # legacy JMI_OPENAI_API_KEY
+    anthropic_api_key: str = ""
 
 
-_load_dotenv()
+def _env_file() -> str | None:
+    # JMI_ENV_FILE overrides the .env location; an empty value disables it (used by tests).
+    override = os.getenv("JMI_ENV_FILE")
+    if override is not None:
+        return override or None
+    return str(DEFAULT_ENV_PATH)
+
+
+def get_app_settings() -> AppSettings:
+    return AppSettings(_env_file=_env_file())
 
 
 @dataclass(frozen=True)
@@ -78,48 +88,50 @@ class JobMatchingSettings:
 
 
 def get_job_matching_settings() -> JobMatchingSettings:
+    settings = get_app_settings()
     return JobMatchingSettings(
-        data_dir=Path(os.getenv("JMI_DATA_DIR", str(DEFAULT_DATA_DIR))).expanduser(),
-        jobs_items_dir=Path(os.getenv("JMI_JOBS_ITEMS_DIR", str(DEFAULT_ITEMS_DIR))).expanduser(),
-        profile_json_path=Path(os.getenv("JMI_PROFILE_JSON_PATH", str(DEFAULT_PROFILE_JSON_PATH))).expanduser(),
-        skill_taxonomy_path=Path(os.getenv("JMI_SKILL_TAXONOMY_PATH", str(DEFAULT_TAXONOMY_PATH))).expanduser(),
-        min_score=float(os.getenv("JMI_MIN_SCORE", "0.42")),
+        data_dir=settings.data_dir.expanduser(),
+        jobs_items_dir=settings.jobs_items_dir.expanduser(),
+        profile_json_path=settings.profile_json_path.expanduser(),
+        skill_taxonomy_path=settings.skill_taxonomy_path.expanduser(),
+        min_score=settings.min_score,
     )
 
 
 def get_llm_api_key(request_api_key: str | None = None, provider: str | None = None) -> str:
     if request_api_key and request_api_key.strip():
         return request_api_key.strip()
-    resolved_provider = get_llm_provider(provider)
-    env_candidates = _llm_api_key_env_candidates(resolved_provider)
-    for env_var in env_candidates:
-        env_api_key = os.getenv(env_var, "").strip()
-        if env_api_key:
-            return env_api_key
+    settings = get_app_settings()
+    resolved_provider = get_llm_provider(provider, settings=settings)
+    candidates = _llm_api_key_candidates(settings, resolved_provider)
+    for _, value in candidates:
+        if value.strip():
+            return value.strip()
+    env_names = [name for name, _ in candidates]
     raise MissingLlmApiKeyError(
-        f"Missing LLM API key. Set {env_candidates[0]} (or {', '.join(env_candidates[1:])}) in your .env file or pass api_key in the request."
+        f"Missing LLM API key. Set {env_names[0]} (or {', '.join(env_names[1:])}) in your .env file or pass api_key in the request."
     )
 
 
-def get_llm_provider(request_provider: str | None = None) -> str:
+def get_llm_provider(request_provider: str | None = None, *, settings: AppSettings | None = None) -> str:
     if request_provider and request_provider.strip():
         return _normalize_provider_name(request_provider)
-    env_provider = os.getenv(LLM_PROVIDER_ENV_VAR, "").strip()
-    if env_provider:
-        return _normalize_provider_name(env_provider)
-    detected_provider = _detect_provider_from_env()
+    settings = settings or get_app_settings()
+    if settings.llm_provider.strip():
+        return _normalize_provider_name(settings.llm_provider)
+    detected_provider = _detect_provider(settings)
     if detected_provider:
         return detected_provider
     return DEFAULT_LLM_PROVIDER
 
 
 def get_llm_model(request_model: str | None = None, provider: str | None = None) -> str:
-    resolved_provider = get_llm_provider(provider)
+    settings = get_app_settings()
+    resolved_provider = get_llm_provider(provider, settings=settings)
     if request_model and request_model.strip():
         return normalize_llm_model(request_model.strip(), provider=resolved_provider)
-    env_model = os.getenv(LLM_MODEL_ENV_VAR, "").strip()
-    if env_model:
-        return normalize_llm_model(env_model, provider=resolved_provider)
+    if settings.llm_model.strip():
+        return normalize_llm_model(settings.llm_model.strip(), provider=resolved_provider)
     return get_llm_default_model(resolved_provider)
 
 
@@ -131,10 +143,10 @@ def get_llm_default_model(provider: str | None = None) -> str:
 def get_llm_base_url(request_base_url: str | None = None, provider: str | None = None) -> str:
     if request_base_url and request_base_url.strip():
         return request_base_url.strip()
-    env_base_url = os.getenv(LLM_BASE_URL_ENV_VAR, "").strip()
-    if env_base_url:
-        return env_base_url
-    resolved_provider = get_llm_provider(provider)
+    settings = get_app_settings()
+    if settings.llm_base_url.strip():
+        return settings.llm_base_url.strip()
+    resolved_provider = get_llm_provider(provider, settings=settings)
     return DEFAULT_LLM_BASE_URL_BY_PROVIDER.get(resolved_provider, DEFAULT_LLM_BASE_URL_BY_PROVIDER[DEFAULT_LLM_PROVIDER])
 
 
@@ -148,25 +160,25 @@ def normalize_llm_model(model: str, provider: str | None = None) -> str:
     return raw_model
 
 
-def _detect_provider_from_env() -> str | None:
-    raw_provider_model = os.getenv(LLM_MODEL_ENV_VAR, "").strip().lower()
-    api_key_candidates = [
-        os.getenv(LLM_API_KEY_ENV_VAR, "").strip(),
-        os.getenv(LEGACY_LLM_API_KEY_ENV_VAR, "").strip(),
-        os.getenv(ANTHROPIC_LLM_API_KEY_ENV_VAR, "").strip(),
-    ]
-    if any(key.startswith("sk-ant") for key in api_key_candidates if key):
+def _detect_provider(settings: AppSettings) -> str | None:
+    api_key_candidates = [settings.llm_api_key, settings.openai_api_key, settings.anthropic_api_key]
+    if any(key.strip().startswith("sk-ant") for key in api_key_candidates if key.strip()):
         return "anthropic"
-    if any(token in raw_provider_model for token in ("claude", "sonnet", "haiku", "opus")):
+    raw_model = settings.llm_model.strip().lower()
+    if any(token in raw_model for token in ("claude", "sonnet", "haiku", "opus")):
         return "anthropic"
     return None
 
 
-def _llm_api_key_env_candidates(provider: str) -> list[str]:
-    normalized = _normalize_provider_name(provider)
-    if normalized == "anthropic":
-        return [ANTHROPIC_LLM_API_KEY_ENV_VAR, LLM_API_KEY_ENV_VAR, LEGACY_LLM_API_KEY_ENV_VAR]
-    return [LLM_API_KEY_ENV_VAR, LEGACY_LLM_API_KEY_ENV_VAR, ANTHROPIC_LLM_API_KEY_ENV_VAR]
+def _llm_api_key_candidates(settings: AppSettings, provider: str) -> list[tuple[str, str]]:
+    generic = [
+        ("JMI_LLM_API_KEY", settings.llm_api_key),
+        ("JMI_OPENAI_API_KEY", settings.openai_api_key),
+    ]
+    anthropic = ("JMI_ANTHROPIC_API_KEY", settings.anthropic_api_key)
+    if _normalize_provider_name(provider) == "anthropic":
+        return [anthropic, *generic]
+    return [*generic, anthropic]
 
 
 def _normalize_provider_name(value: str) -> str:

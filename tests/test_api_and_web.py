@@ -16,15 +16,17 @@ from app.services.job_matching import JobMatchingService
 from app.services.profile_generation import ProfileGenerationService
 from app.services.settings import JobMatchingSettings, get_llm_model
 
-ROOT = Path(__file__).resolve().parents[1]
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+FIXTURE_PROFILE = FIXTURES / "technical_experience.json"
+FIXTURE_TAXONOMY = FIXTURES / "skill_taxonomy.yaml"
 
 
 def _service(tmp_path):
     settings = JobMatchingSettings(
         data_dir=tmp_path / "data",
         jobs_items_dir=tmp_path / "items",
-        profile_json_path=ROOT / "items/profile/technical_experience.json",
-        skill_taxonomy_path=ROOT / "items/profile/skill_taxonomy.yaml",
+        profile_json_path=FIXTURE_PROFILE,
+        skill_taxonomy_path=FIXTURE_TAXONOMY,
         min_score=0.42,
     )
     return JobMatchingService(settings=settings)
@@ -191,7 +193,7 @@ def test_home_page_and_htmx_upload(tmp_path):
     assert "Actualizar perfil" in home.text
     assert "Rutas locales" in home.text
     assert "Perfil" in home.text
-    assert "Backend Python Api Design" in home.text
+    assert "Backend Python API Design" in home.text
     csv_text = (
         "source_job_id,title,company,description\n"
         "1,Backend Python Engineer,Acme,Python FastAPI REST APIs AWS Lambda SQLite\n"
@@ -340,7 +342,8 @@ def test_generate_targeted_cv_accepts_legacy_openai_api_key_env(tmp_path, monkey
     )
     generated = asyncio.run(
         generate_targeted_cv(
-            profile_json_path=ROOT / "items/profile/technical_experience.json",
+            profile_json_path=FIXTURE_PROFILE,
+            taxonomy_yaml_path=FIXTURE_TAXONOMY,
             output_dir=tmp_path,
             job=job,
             api_key=None,
@@ -370,7 +373,8 @@ def test_generate_targeted_cv_uses_env_model_and_base_url_defaults(tmp_path, mon
     )
     generated = asyncio.run(
         generate_targeted_cv(
-            profile_json_path=ROOT / "items/profile/technical_experience.json",
+            profile_json_path=FIXTURE_PROFILE,
+            taxonomy_yaml_path=FIXTURE_TAXONOMY,
             output_dir=tmp_path,
             job=job,
             api_key=None,
@@ -409,7 +413,8 @@ def test_generate_targeted_cv_supports_anthropic_without_base_url(tmp_path, monk
     )
     generated = asyncio.run(
         generate_targeted_cv(
-            profile_json_path=ROOT / "items/profile/technical_experience.json",
+            profile_json_path=FIXTURE_PROFILE,
+            taxonomy_yaml_path=FIXTURE_TAXONOMY,
             output_dir=tmp_path,
             job=job,
             api_key=None,
@@ -442,7 +447,8 @@ def test_generate_targeted_cv_falls_back_to_default_model_when_requested_alias_f
     )
     generated = asyncio.run(
         generate_targeted_cv(
-            profile_json_path=ROOT / "items/profile/technical_experience.json",
+            profile_json_path=FIXTURE_PROFILE,
+            taxonomy_yaml_path=FIXTURE_TAXONOMY,
             output_dir=tmp_path,
             job=job,
             api_key=None,

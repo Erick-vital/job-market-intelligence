@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from typing_extensions import Annotated
 
 from app.models.job_matching import JobPosting
@@ -82,7 +82,7 @@ class CvGenerateRequest(BaseModel):
     location: str = ""
     source_url: str = ""
     language: str = "en"
-    provider: str = get_llm_provider()
+    provider: str = Field(default_factory=get_llm_provider)
     model: str | None = None
     base_url: str | None = None
 

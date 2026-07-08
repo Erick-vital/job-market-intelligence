@@ -12,6 +12,7 @@ from typing import Any, Literal
 import yaml
 
 from app.services.llm_generation import LlmGenerationProviderError, LlmGenerationService, LlmGenerationResult
+from app.services.profile_taxonomy import build_skill_taxonomy, unique
 from app.services.settings import MissingLlmApiKeyError
 
 logger = logging.getLogger(__name__)
@@ -28,65 +29,17 @@ class TechnicalProfileGenerationResult:
     llm_fallback_reason: str | None = None
 
 
-def generate_technical_profile(*, evidence_path: Path, output_path: Path) -> TechnicalProfileGenerationResult:
-    rows = _read_evidence_rows(evidence_path)
-    existing_profile = _read_existing_profile(output_path)
-    existing_capabilities = {str(cap.get("id") or ""): cap for cap in existing_profile.get("capabilities") or []}
-    by_capability: dict[str, list[dict[str, Any]]] = {}
-    skills_by_capability: dict[str, Counter[str]] = {}
-
-    for row in rows:
-        capabilities = row.get("capabilities", []) or [row.get("signal", "general_capability")]
-        for capability in capabilities:
-            capability_id = str(capability or "general_capability")
-            by_capability.setdefault(capability_id, []).append(row)
-            skills_by_capability.setdefault(capability_id, Counter()).update(str(skill) for skill in row.get("skills", []))
-
-    capabilities_payload = []
-    for capability_id, capability_rows in sorted(by_capability.items()):
-        existing = existing_capabilities.get(capability_id, {})
-        generated_skills = [name for name, _ in skills_by_capability[capability_id].most_common(12)]
-        existing_skills = [str(skill) for skill in existing.get("skills") or [] if str(skill).strip()]
-        skills = _unique(generated_skills + existing_skills)[:16]
-        existing_summary = str(existing.get("summary") or "")
-        summary = existing_summary if existing_summary and "Capability inferred from repo evidence" not in existing_summary else "Capability inferred from repo evidence. Edit this summary before using publicly."
-        capabilities_payload.append(
-            {
-                "id": capability_id,
-                "name": str(existing.get("name") or capability_id.replace("_", " ").title()),
-                "level": str(existing.get("level") or "working"),
-                "confidence": _confidence(capability_rows),
-                "evidence_type": str(existing.get("evidence_type") or "repo-evidenced"),
-                "summary": summary,
-                "skills": skills,
-                "evidence_refs": sorted({str(row.get("repo", "")) for row in capability_rows if row.get("repo")}),
-                "cv_phrases": list(existing.get("cv_phrases") or []),
-            }
-        )
-
-    output = {
-        "version": "generated.v1",
-        "updated_at": date.today().isoformat(),
-        "purpose": "Canonical technical profile generated from repo evidence.",
-        "supporting_skill": "docs/technical-profile-evidence-skill.md",
-        "sources": [str(evidence_path)],
-        "capabilities": capabilities_payload,
-        "job_matching_guidance": {"prioritize": [], "deprioritize": []},
-        "update_rules": ["Review generated summaries manually before using for job matching."],
-    }
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
-    taxonomy_path = output_path.parent / "skill_taxonomy.yaml"
-    _write_skill_taxonomy(output, taxonomy_path)
-    logger.info(
-        "technical profile skill taxonomy written",
-        extra={"taxonomy_path": str(taxonomy_path), "source_profile_path": str(output_path)},
-    )
+def generate_technical_profile(
+    *, evidence_path: Path, output_path: Path, llm_fallback_reason: str | None = None
+) -> TechnicalProfileGenerationResult:
+    output = _build_deterministic_profile(evidence_path=evidence_path, output_path=output_path)
+    _write_profile_and_taxonomy(output, output_path)
     return TechnicalProfileGenerationResult(
         output_path=output_path,
         evidence_path=evidence_path,
-        capabilities_count=len(capabilities_payload),
+        capabilities_count=len(output["capabilities"]),
         generation_mode="deterministic",
+        llm_fallback_reason=llm_fallback_reason,
     )
 
 
@@ -105,10 +58,16 @@ async def generate_technical_profile_with_skill(
     resolved_skill_path = skill_path or Path("docs/technical-profile-evidence-skill.md")
     skill_text = _read_optional_text(resolved_skill_path)
     service = llm_service or LlmGenerationService()
-    prompt = _build_profile_skill_prompt(skill_text=skill_text, evidence_rows=_read_evidence_rows(evidence_path), existing_profile=_read_existing_profile(output_path), deterministic_profile=deterministic)
+    evidence_rows = _read_evidence_rows(evidence_path)
+    prompt = _build_profile_skill_prompt(
+        skill_text=skill_text,
+        evidence_rows=evidence_rows,
+        existing_profile=_read_existing_profile(output_path),
+        deterministic_profile=deterministic,
+    )
     logger.info(
         "technical profile llm generation requested",
-        extra={"evidence_path": str(evidence_path), "output_path": str(output_path), "skill_path": str(resolved_skill_path), "evidence_rows": len(_read_evidence_rows(evidence_path))},
+        extra={"evidence_path": str(evidence_path), "output_path": str(output_path), "skill_path": str(resolved_skill_path), "evidence_rows": len(evidence_rows)},
     )
     try:
         raw_result = await service.generate_text(
@@ -122,13 +81,8 @@ async def generate_technical_profile_with_skill(
             "technical profile llm generation unavailable; using deterministic fallback",
             extra={"error": str(exc), "generation_mode": "deterministic", "llm_fallback_reason": "llm_provider_unavailable"},
         )
-        result = generate_technical_profile(evidence_path=evidence_path, output_path=output_path)
-        return TechnicalProfileGenerationResult(
-            output_path=result.output_path,
-            evidence_path=result.evidence_path,
-            capabilities_count=result.capabilities_count,
-            generation_mode="deterministic",
-            llm_fallback_reason="llm_provider_unavailable",
+        return generate_technical_profile(
+            evidence_path=evidence_path, output_path=output_path, llm_fallback_reason="llm_provider_unavailable"
         )
     text = raw_result.text if isinstance(raw_result, LlmGenerationResult) else str(raw_result)
     try:
@@ -139,25 +93,13 @@ async def generate_technical_profile_with_skill(
             "technical profile llm output invalid; using deterministic fallback",
             extra={"error": str(exc), "generation_mode": "deterministic", "llm_fallback_reason": "invalid_llm_output"},
         )
-        result = generate_technical_profile(evidence_path=evidence_path, output_path=output_path)
-        return TechnicalProfileGenerationResult(
-            output_path=result.output_path,
-            evidence_path=result.evidence_path,
-            capabilities_count=result.capabilities_count,
-            generation_mode="deterministic",
-            llm_fallback_reason="invalid_llm_output",
+        return generate_technical_profile(
+            evidence_path=evidence_path, output_path=output_path, llm_fallback_reason="invalid_llm_output"
         )
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
+    _write_profile_and_taxonomy(output, output_path)
     logger.info(
         "technical profile llm generation completed",
         extra={"generation_mode": "llm", "llm_provider": raw_result.provider, "llm_model": raw_result.model},
-    )
-    taxonomy_path = output_path.parent / "skill_taxonomy.yaml"
-    _write_skill_taxonomy(output, taxonomy_path)
-    logger.info(
-        "technical profile skill taxonomy written",
-        extra={"taxonomy_path": str(taxonomy_path), "source_profile_path": str(output_path)},
     )
     return TechnicalProfileGenerationResult(
         output_path=output_path,
@@ -188,7 +130,7 @@ def _build_deterministic_profile(*, evidence_path: Path, output_path: Path) -> d
         existing = existing_capabilities.get(capability_id, {})
         generated_skills = [name for name, _ in skills_by_capability[capability_id].most_common(12)]
         existing_skills = [str(skill) for skill in existing.get("skills") or [] if str(skill).strip()]
-        skills = _unique(generated_skills + existing_skills)[:16]
+        skills = unique(generated_skills + existing_skills)[:16]
         existing_summary = str(existing.get("summary") or "")
         summary = existing_summary if existing_summary and "Capability inferred from repo evidence" not in existing_summary else "Capability inferred from repo evidence. Edit this summary before using publicly."
         capabilities_payload.append(
@@ -215,6 +157,17 @@ def _build_deterministic_profile(*, evidence_path: Path, output_path: Path) -> d
         "job_matching_guidance": {"prioritize": [], "deprioritize": []},
         "update_rules": ["Review generated summaries manually before using for job matching."],
     }
+
+
+def _write_profile_and_taxonomy(output: dict[str, Any], output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
+    taxonomy_path = output_path.parent / "skill_taxonomy.yaml"
+    _write_skill_taxonomy(output, taxonomy_path)
+    logger.info(
+        "technical profile skill taxonomy written",
+        extra={"taxonomy_path": str(taxonomy_path), "source_profile_path": str(output_path)},
+    )
 
 
 def _technical_profile_system_prompt() -> str:
@@ -287,29 +240,25 @@ def _normalize_profile_output(output: dict[str, Any], *, evidence_path: Path) ->
     return output
 
 
-def _build_skill_taxonomy(profile: dict[str, Any]) -> dict[str, Any]:
-    core: list[str] = []
-    declared_expansion: list[str] = []
-    for cap in profile.get("capabilities") or []:
-        skills = [str(skill).strip() for skill in cap.get("skills") or [] if str(skill).strip()]
-        if not skills:
-            continue
-        evidence_type = str(cap.get("evidence_type") or "repo-evidenced").lower()
-        confidence = str(cap.get("confidence") or "").lower()
-        target = core if evidence_type == "repo-evidenced" and confidence in {"high", "medium_high"} else declared_expansion
-        target.extend(skills)
-    return {
-        "categories": {
-            "core": {"skills": _unique(core)},
-            "declared_expansion": {"skills": _unique(declared_expansion)},
-        }
-    }
-
-
 def _write_skill_taxonomy(profile: dict[str, Any], taxonomy_path: Path) -> None:
     taxonomy_path.parent.mkdir(parents=True, exist_ok=True)
-    taxonomy = _build_skill_taxonomy(profile)
+    taxonomy = build_skill_taxonomy(profile)
+    existing_matching = _read_existing_matching_section(taxonomy_path)
+    if existing_matching:
+        taxonomy["matching"] = existing_matching
     taxonomy_path.write_text(yaml.safe_dump(taxonomy, sort_keys=False, allow_unicode=True), encoding="utf-8")
+
+
+def _read_existing_matching_section(taxonomy_path: Path) -> dict[str, Any] | None:
+    """Preserve the user-curated `matching:` config when regenerating the taxonomy."""
+    if not taxonomy_path.exists():
+        return None
+    try:
+        existing = yaml.safe_load(taxonomy_path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return None
+    matching = existing.get("matching") if isinstance(existing, dict) else None
+    return matching if isinstance(matching, dict) else None
 
 
 def _read_optional_text(path: Path) -> str:
@@ -336,16 +285,6 @@ def _read_existing_profile(output_path: Path) -> dict[str, Any]:
         return json.loads(output_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return {}
-
-
-def _unique(values: list[str]) -> list[str]:
-    seen: set[str] = set()
-    output: list[str] = []
-    for value in values:
-        if value not in seen:
-            seen.add(value)
-            output.append(value)
-    return output
 
 
 def _confidence(rows: list[dict[str, Any]]) -> str:

@@ -164,3 +164,25 @@ def test_profile_generation_request_splits_textarea_lines():
 
     assert request.public_repo_urls == ["https://github.com/a/b", "https://github.com/c/d"]
     assert request.local_repo_paths == ["/tmp/one", "/tmp/two"]
+
+
+def test_taxonomy_regeneration_preserves_curated_matching_section(tmp_path):
+    evidence = tmp_path / "repo_evidence.jsonl"
+    output = tmp_path / "technical_experience.json"
+    taxonomy = tmp_path / "skill_taxonomy.yaml"
+    evidence.write_text(
+        '{"repo":"demo","signal":"fastapi_project","capabilities":["backend_python_api_design"],"skills":["Python","FastAPI"],"confidence":"high"}\n',
+        encoding="utf-8",
+    )
+    taxonomy.write_text(
+        "categories:\n  core:\n    skills:\n    - Old Skill\nmatching:\n  gap_skills:\n  - Kubernetes\n  location_terms:\n  - remote\n",
+        encoding="utf-8",
+    )
+
+    generate_technical_profile(evidence_path=evidence, output_path=output)
+
+    regenerated = taxonomy.read_text(encoding="utf-8")
+    assert "FastAPI" in regenerated
+    assert "Old Skill" not in regenerated
+    assert "matching:" in regenerated
+    assert "Kubernetes" in regenerated

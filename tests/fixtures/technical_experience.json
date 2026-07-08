@@ -1,0 +1,62 @@
+{
+  "version": "generated.v1",
+  "updated_at": "2026-01-01",
+  "purpose": "Frozen sample canonical technical profile used only by the test suite.",
+  "supporting_skill": "docs/technical-profile-evidence-skill.md",
+  "sources": [
+    "tests/fixtures/technical_experience.json"
+  ],
+  "capabilities": [
+    {
+      "id": "backend_python_api_design",
+      "name": "Backend Python API Design",
+      "level": "strong",
+      "confidence": "high",
+      "evidence_type": "repo-evidenced",
+      "summary": "Builds backend Python REST APIs with FastAPI, Pydantic schemas, and automated tests.",
+      "skills": ["Python", "FastAPI", "REST APIs"],
+      "evidence_refs": ["sample-repo"],
+      "cv_phrases": ["Built testable Python/FastAPI backend REST APIs with structured schemas."]
+    },
+    {
+      "id": "cloud_serverless_automation",
+      "name": "Cloud Serverless Automation",
+      "level": "strong",
+      "confidence": "high",
+      "evidence_type": "repo-evidenced",
+      "summary": "Automates cloud workflows with AWS Lambda, S3, and CLI automation scripts.",
+      "skills": ["AWS", "Lambda", "S3", "CLI automation"],
+      "evidence_refs": ["sample-repo"],
+      "cv_phrases": ["Automated serverless AWS Lambda and S3 workflows."]
+    },
+    {
+      "id": "local_persistence_and_data_modeling",
+      "name": "Local Persistence And Data Modeling",
+      "level": "working",
+      "confidence": "high",
+      "evidence_type": "repo-evidenced",
+      "summary": "Models and persists data with SQLite for local-first applications.",
+      "skills": ["SQLite"],
+      "evidence_refs": ["sample-repo"],
+      "cv_phrases": ["Persisted structured data with SQLite."]
+    },
+    {
+      "id": "automated_testing",
+      "name": "Automated Testing",
+      "level": "working",
+      "confidence": "high",
+      "evidence_type": "repo-evidenced",
+      "summary": "Covers backend behavior with pytest suites.",
+      "skills": ["pytest"],
+      "evidence_refs": ["sample-repo"],
+      "cv_phrases": ["Covered backend flows with pytest."]
+    }
+  ],
+  "job_matching_guidance": {
+    "prioritize": ["repo-evidenced capabilities"],
+    "deprioritize": []
+  },
+  "update_rules": [
+    "This file is a frozen test fixture; runtime profile updates must never touch it."
+  ]
+}
