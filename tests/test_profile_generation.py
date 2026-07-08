@@ -23,9 +23,12 @@ def test_generate_technical_profile_service_from_evidence(tmp_path):
 
     assert result.output_path == output
     assert result.capabilities_count == 1
+    taxonomy = output.parent / "skill_taxonomy.yaml"
+    assert taxonomy.exists()
     data = json.loads(output.read_text(encoding="utf-8"))
     assert data["capabilities"][0]["id"] == "backend_python_api_design"
     assert "FastAPI" in data["capabilities"][0]["skills"]
+    assert "core" in taxonomy.read_text(encoding="utf-8")
 
 
 class FakeProfileLlmService:
@@ -92,6 +95,8 @@ def test_generate_technical_profile_with_skill_uses_llm_prompt_and_skill_doc(tmp
     assert "fastapi_project" in fake_llm.calls[0]["prompt"]
     assert any(r.message == "technical profile llm generation completed" for r in caplog.records)
     assert any(getattr(r, "generation_mode", None) == "llm" for r in caplog.records)
+    taxonomy = output.parent / "skill_taxonomy.yaml"
+    assert taxonomy.exists()
     data = json.loads(output.read_text(encoding="utf-8"))
     assert data["supporting_skill"] == "docs/technical-profile-evidence-skill.md"
     assert data["capabilities"][0]["summary"] == "Creates testable Python/FastAPI backend APIs from repo evidence."
@@ -143,6 +148,7 @@ def test_profile_generation_service_writes_evidence_and_profile(tmp_path, caplog
     assert result.evidence_rows_written >= 2
     assert Path(result.evidence_path).exists()
     assert Path(result.technical_profile_path).exists()
+    assert Path(result.technical_profile_path).with_name("skill_taxonomy.yaml").exists()
     assert any(r.message == "profile generation completed" for r in caplog.records)
     assert any(getattr(r, "technical_profile_generation_mode", None) == "deterministic" for r in caplog.records)
     data = json.loads(Path(result.technical_profile_path).read_text(encoding="utf-8"))

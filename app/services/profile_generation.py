@@ -78,6 +78,7 @@ class ProfileGenerationService:
                 "repos_analyzed": repos_analyzed,
                 "evidence_rows_written": written_count,
                 "technical_profile_path": str(profile_result.output_path),
+                "skill_taxonomy_path": str(profile_result.output_path.parent / "skill_taxonomy.yaml"),
                 "evidence_path": str(evidence_path),
                 "technical_profile_generation_mode": profile_result.generation_mode,
                 "technical_profile_llm_provider": profile_result.llm_provider,

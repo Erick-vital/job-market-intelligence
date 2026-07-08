@@ -9,6 +9,8 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Literal
 
+import yaml
+
 from app.services.llm_generation import LlmGenerationProviderError, LlmGenerationService, LlmGenerationResult
 from app.services.settings import MissingLlmApiKeyError
 
@@ -74,6 +76,12 @@ def generate_technical_profile(*, evidence_path: Path, output_path: Path) -> Tec
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
+    taxonomy_path = output_path.parent / "skill_taxonomy.yaml"
+    _write_skill_taxonomy(output, taxonomy_path)
+    logger.info(
+        "technical profile skill taxonomy written",
+        extra={"taxonomy_path": str(taxonomy_path), "source_profile_path": str(output_path)},
+    )
     return TechnicalProfileGenerationResult(
         output_path=output_path,
         evidence_path=evidence_path,
@@ -144,6 +152,12 @@ async def generate_technical_profile_with_skill(
     logger.info(
         "technical profile llm generation completed",
         extra={"generation_mode": "llm", "llm_provider": raw_result.provider, "llm_model": raw_result.model},
+    )
+    taxonomy_path = output_path.parent / "skill_taxonomy.yaml"
+    _write_skill_taxonomy(output, taxonomy_path)
+    logger.info(
+        "technical profile skill taxonomy written",
+        extra={"taxonomy_path": str(taxonomy_path), "source_profile_path": str(output_path)},
     )
     return TechnicalProfileGenerationResult(
         output_path=output_path,
@@ -271,6 +285,31 @@ def _normalize_profile_output(output: dict[str, Any], *, evidence_path: Path) ->
     output.setdefault("job_matching_guidance", {"prioritize": [], "deprioritize": []})
     output.setdefault("update_rules", ["Review generated summaries manually before using for job matching."])
     return output
+
+
+def _build_skill_taxonomy(profile: dict[str, Any]) -> dict[str, Any]:
+    core: list[str] = []
+    declared_expansion: list[str] = []
+    for cap in profile.get("capabilities") or []:
+        skills = [str(skill).strip() for skill in cap.get("skills") or [] if str(skill).strip()]
+        if not skills:
+            continue
+        evidence_type = str(cap.get("evidence_type") or "repo-evidenced").lower()
+        confidence = str(cap.get("confidence") or "").lower()
+        target = core if evidence_type == "repo-evidenced" and confidence in {"high", "medium_high"} else declared_expansion
+        target.extend(skills)
+    return {
+        "categories": {
+            "core": {"skills": _unique(core)},
+            "declared_expansion": {"skills": _unique(declared_expansion)},
+        }
+    }
+
+
+def _write_skill_taxonomy(profile: dict[str, Any], taxonomy_path: Path) -> None:
+    taxonomy_path.parent.mkdir(parents=True, exist_ok=True)
+    taxonomy = _build_skill_taxonomy(profile)
+    taxonomy_path.write_text(yaml.safe_dump(taxonomy, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
 
 def _read_optional_text(path: Path) -> str:

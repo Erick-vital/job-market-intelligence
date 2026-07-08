@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -9,6 +10,47 @@ from typing import Any
 import yaml
 
 from app.models.job_matching import JobMatchResult, JobPosting
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_TAXONOMY = {
+    "categories": {
+        "core": {
+            "skills": [
+                "Python",
+                "FastAPI",
+                "REST APIs",
+                "SQLite",
+                "pytest",
+                "CLI automation",
+                "AWS",
+                "Lambda",
+                "S3",
+            ]
+        },
+        "declared_expansion": {
+            "skills": [
+                "Pydantic",
+                "JSONL",
+                "Docker",
+                "CI/CD",
+                "HTMX",
+                "Jinja2",
+                "JavaScript",
+                "HTML",
+                "CSS",
+                "Browser Extensions",
+                "Terraform",
+                "Kubernetes",
+                "React",
+                "GraphQL",
+                "Java",
+                ".NET",
+                "Go",
+            ]
+        },
+    }
+}
 
 EXTRA_ALIASES = {
     "REST APIs": ["rest", "restful"],
@@ -38,9 +80,29 @@ class ProfileIndex:
     summary: str
 
 
+def _read_taxonomy(taxonomy_yaml_path: Path) -> dict[str, Any]:
+    try:
+        if not taxonomy_yaml_path.exists():
+            logger.warning(
+                "skill taxonomy file missing; using built-in default taxonomy",
+                extra={"taxonomy_path": str(taxonomy_yaml_path)},
+            )
+            return DEFAULT_TAXONOMY
+        loaded = yaml.safe_load(taxonomy_yaml_path.read_text(encoding="utf-8")) or {}
+        if not isinstance(loaded, dict):
+            raise TypeError("taxonomy YAML must load as a mapping")
+        return loaded
+    except Exception as exc:
+        logger.warning(
+            "skill taxonomy file invalid; using built-in default taxonomy",
+            extra={"taxonomy_path": str(taxonomy_yaml_path), "error": str(exc)},
+        )
+        return DEFAULT_TAXONOMY
+
+
 def load_profile(profile_json_path: Path, taxonomy_yaml_path: Path) -> ProfileIndex:
     profile = json.loads(profile_json_path.read_text(encoding="utf-8"))
-    taxonomy = yaml.safe_load(taxonomy_yaml_path.read_text(encoding="utf-8")) or {}
+    taxonomy = _read_taxonomy(taxonomy_yaml_path)
     capability_weights = _capability_skill_weights(profile)
     skills: list[SkillEntry] = []
     for category, data in (taxonomy.get("categories") or {}).items():
@@ -84,7 +146,7 @@ def score_job(job: JobPosting, profile: ProfileIndex) -> JobMatchResult:
     if "frontend" in title and not any(term in text for term in ["python", "backend", "api"]):
         negative_penalty = max(negative_penalty, 0.30)
 
-    score = (skill_overlap * 0.55) + (capability_alignment * 0.25) + (title_alignment * 0.10) + (location_bonus * 0.05) - negative_penalty
+    score = (skill_overlap * 0.60) + (capability_alignment * 0.25) + (title_alignment * 0.12) + (location_bonus * 0.05) - negative_penalty
     score = max(0.0, min(1.0, score))
     matched_names = _unique([skill.name for skill in sorted(matched, key=lambda item: item.weight, reverse=True)])[:12]
     missing = [skill for skill in GAP_SKILLS if _contains_alias(text, _searchable(skill)) and skill not in matched_names][:6]
