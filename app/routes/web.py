@@ -7,10 +7,13 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from app.schemas.job_matching import CvGenerateRequest, ManualJobMatchRequest
+from app.schemas.profile_generation import ProfileGenerateRequest
 from app.services.cv_generation import CvGenerationProviderError
 from app.services.job_file_parser import JobFileParseError
 from app.services.job_matching import JobMatchingService, build_job_matching_service_from_env
-from app.services.settings import MissingLlmApiKeyError, get_llm_provider
+from app.services.profile_generation import ProfileGenerationService, build_profile_generation_service_from_env
+from app.services.profile_snapshot import load_profile_snapshot
+from app.services.settings import MissingLlmApiKeyError, get_job_matching_settings, get_llm_provider
 
 router = APIRouter(tags=["web"])
 templates = Jinja2Templates(directory="app/templates")
@@ -21,9 +24,15 @@ def get_job_matching_service() -> JobMatchingService:
     return build_job_matching_service_from_env()
 
 
+def get_profile_generation_service() -> ProfileGenerationService:
+    return build_profile_generation_service_from_env()
+
+
 @router.get("/", response_class=HTMLResponse)
 def home(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request=request, name="index.html", context={})
+    settings = get_job_matching_settings()
+    profile = load_profile_snapshot(settings.profile_json_path)
+    return templates.TemplateResponse(request=request, name="index.html", context={"profile": profile})
 
 
 @router.post("/ui/jobs/import", response_class=HTMLResponse)
@@ -64,6 +73,46 @@ async def match_manual_job_ui(
     payload = ManualJobMatchRequest(company=company, title=title, description=description, location=location, source_url=source_url)
     match = await service.match_manual_job(job=payload.to_job())
     return templates.TemplateResponse(request=request, name="partials/manual_match.html", context={"match": match})
+
+
+@router.post("/ui/profile/generate", response_class=HTMLResponse)
+async def generate_profile_ui(
+    request: Request,
+    public_repo_urls: str = Form(default=""),
+    local_repo_paths: str = Form(default=""),
+    append_evidence: bool = Form(default=False),
+    service: ProfileGenerationService = Depends(get_profile_generation_service),
+) -> HTMLResponse:
+    try:
+        logger.info(
+            "profile ui update requested",
+            extra={
+                "public_repo_url_chars": len(public_repo_urls),
+                "local_repo_path_chars": len(local_repo_paths),
+                "append_evidence": append_evidence,
+            },
+        )
+        payload = ProfileGenerateRequest.model_validate(
+            {
+                "public_repo_urls": public_repo_urls,
+                "local_repo_paths": local_repo_paths,
+                "append_evidence": append_evidence,
+            }
+        )
+        result = service.generate_profile(payload)
+    except ValueError as exc:
+        return templates.TemplateResponse(request=request, name="partials/error.html", context={"error": str(exc)}, status_code=400)
+    profile = load_profile_snapshot(service.settings.profile_json_path)
+    logger.info(
+        "profile ui update response rendered",
+        extra={
+            "status": result.status,
+            "repos_analyzed": result.repos_analyzed,
+            "profile_capability_count": profile.capability_count,
+            "profile_path": str(profile.path),
+        },
+    )
+    return templates.TemplateResponse(request=request, name="partials/profile_generation.html", context={"result": result, "profile": profile})
 
 
 @router.post("/ui/cv/generate", response_class=HTMLResponse)

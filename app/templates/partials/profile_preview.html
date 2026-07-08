@@ -1,0 +1,54 @@
+<section class="card" id="profile-preview" hx-swap-oob="true">
+  <p class="eyebrow">Perfil</p>
+  <h2>{{ profile.purpose or 'Perfil técnico canónico' }}</h2>
+  {% if profile.exists %}
+    <div class="metrics">
+      <div><strong>{{ profile.capability_count }}</strong><span>capacidades</span></div>
+      <div><strong>{{ profile.skill_count }}</strong><span>skills listadas</span></div>
+      <div><strong>{{ profile.updated_at or '—' }}</strong><span>updated at</span></div>
+      <div><strong>{{ profile.path.name }}</strong><span>archivo</span></div>
+    </div>
+
+    <div class="columns profile-columns">
+      <section>
+        <h3>Capacidades</h3>
+        <ul>
+          {% for cap in profile.capabilities %}
+            <li>
+              <strong>{{ cap.name }}</strong>
+              <div class="profile-meta">
+                <span>{{ cap.confidence }}</span>
+                <span>{{ cap.level }}</span>
+              </div>
+              {% if cap.skills %}<p>{{ cap.skills|join(', ') }}</p>{% endif %}
+            </li>
+          {% else %}
+            <li>No capabilities yet.</li>
+          {% endfor %}
+        </ul>
+      </section>
+
+      <section>
+        <h3>Skills frecuentes</h3>
+        <ul>
+          {% for skill in profile.unique_skills %}
+            <li>{{ skill }}</li>
+          {% else %}
+            <li>No skills detected yet.</li>
+          {% endfor %}
+        </ul>
+
+        <h3>Fuentes</h3>
+        <ul>
+          {% for source in profile.sources %}
+            <li><code>{{ source }}</code></li>
+          {% else %}
+            <li>No sources recorded.</li>
+          {% endfor %}
+        </ul>
+      </section>
+    </div>
+  {% else %}
+    <p class="muted">Aún no se ha generado un perfil técnico. Usa “Actualizar perfil” para crear uno.</p>
+  {% endif %}
+</section>

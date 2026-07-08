@@ -212,6 +212,26 @@ Recommended profile workflow:
 4. Update `skill_taxonomy.yaml` when a relevant skill should be detected by the matcher.
 5. Re-run manual or batch matching to validate the profile.
 
+### Generate the technical profile from repos
+
+From the web UI, use `Technical profile` -> `Generar perfil`.
+
+You can provide:
+
+- public HTTPS Git repository URLs, one per line;
+- local repository paths, one per line.
+
+Local paths are useful for private repos because the app analyzes them locally and does not upload code. The generator reads repo structure and text files conservatively; it does not execute code from analyzed repos.
+
+The generator updates:
+
+```text
+items/profile/repo_evidence.jsonl
+items/profile/technical_experience.json
+```
+
+Review the generated profile before using it for CV generation or job matching. The human-readable `items/profile/technical_experience.md` is not overwritten automatically.
+
 ## LinkedIn Jobs browser extension
 
 The extension is in:

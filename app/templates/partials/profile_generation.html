@@ -1,0 +1,34 @@
+<div id="profile-update-status" class="profile-status is-success" role="status" aria-live="polite" hx-swap-oob="true">✓ Perfil actualizado</div>
+
+<div class="card results">
+  <h2>Perfil actualizado</h2>
+  <p class="alert success">El perfil se actualizó correctamente. La sección “Perfil” refleja el estado guardado en disco.</p>
+  <div class="metrics">
+    <div><strong>{{ result.repos_analyzed }}</strong><span>repos analizados</span></div>
+    <div><strong>{{ result.evidence_rows_written }}</strong><span>evidence rows written</span></div>
+    <div><strong>{{ result.repos|length }}</strong><span>fuentes enviadas</span></div>
+    <div><strong>{{ result.status }}</strong><span>status</span></div>
+  </div>
+
+  <h3>Repos procesados</h3>
+  <div class="match-list">
+    {% for repo in result.repos %}
+      <article class="match">
+        <div class="score">{{ repo.evidence_count }}</div>
+        <div>
+          <h4>{{ repo.source_type }} — {{ repo.status }}</h4>
+          <p><code>{{ repo.source }}</code></p>
+          {% if repo.signals %}<p><strong>Signals:</strong> {{ repo.signals|join(', ') }}</p>{% endif %}
+          {% if repo.warning %}<p><strong>Warning:</strong> {{ repo.warning }}</p>{% endif %}
+        </div>
+      </article>
+    {% else %}
+      <p>No repositories were analyzed.</p>
+    {% endfor %}
+  </div>
+
+  <p class="path-note">Evidence saved to: <code>{{ result.evidence_path }}</code></p>
+  <p class="path-note">Technical profile saved to: <code>{{ result.technical_profile_path }}</code></p>
+</div>
+
+{% include 'partials/profile_preview.html' %}

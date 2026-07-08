@@ -92,7 +92,29 @@
             <p class="path-note">More detail: <code>docs/canonical_technical_profile.md</code></p>
           </section>
         </div>
+        <section class="profile-generator">
+          <h3>Actualizar perfil desde repos</h3>
+          <p class="muted">Agrega URLs públicas o rutas locales. Las rutas locales permiten analizar repos privados sin subirlos.</p>
+          <form hx-post="/ui/profile/generate" hx-target="#results" hx-swap="innerHTML" hx-on::before-request="document.getElementById('profile-update-status').textContent='Actualizando perfil…'; document.getElementById('profile-update-status').className='profile-status is-loading';">
+            <label>URLs de repos públicos, una por línea
+              <textarea name="public_repo_urls" rows="4" placeholder="https://github.com/user/repo"></textarea>
+            </label>
+            <label>Rutas locales de repos, una por línea
+              <textarea name="local_repo_paths" rows="4" placeholder="/home/erickesc/repos/private-repo"></textarea>
+            </label>
+            <label class="checkbox-row">
+              <input type="checkbox" name="append_evidence" value="true" checked />
+              Agregar evidencia al archivo existente
+            </label>
+            <div class="profile-action-row">
+              <button type="submit">Actualizar perfil</button>
+              <span id="profile-update-status" class="profile-status" role="status" aria-live="polite"></span>
+            </div>
+          </form>
+        </section>
       </section>
+
+      {% include 'partials/profile_preview.html' %}
 
       <section id="cv-generator" class="card">
         <p class="eyebrow">Generate CV</p>

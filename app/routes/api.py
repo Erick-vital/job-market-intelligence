@@ -11,9 +11,11 @@ from app.schemas.job_matching import (
     ManualJobMatchRequest,
     ManualJobMatchResponse,
 )
+from app.schemas.profile_generation import ProfileGenerateRequest, ProfileGenerateResponse
 from app.services.job_file_parser import JobFileParseError
 from app.services.cv_generation import CvGenerationProviderError
 from app.services.job_matching import JobMatchingService, build_job_matching_service_from_env
+from app.services.profile_generation import ProfileGenerationService, build_profile_generation_service_from_env
 from app.services.settings import MissingLlmApiKeyError
 
 router = APIRouter(prefix="/api", tags=["job-intelligence"])
@@ -22,6 +24,10 @@ logger = logging.getLogger(__name__)
 
 def get_job_matching_service() -> JobMatchingService:
     return build_job_matching_service_from_env()
+
+
+def get_profile_generation_service() -> ProfileGenerationService:
+    return build_profile_generation_service_from_env()
 
 
 @router.post("/jobs/import", response_model=JobMatchResponse)
@@ -68,6 +74,18 @@ async def match_manual_job(
 ) -> ManualJobMatchResponse:
     match = await service.match_manual_job(job=payload.to_job())
     return ManualJobMatchResponse(status="completed", match=match.to_response_dict())
+
+
+@router.post("/profile/generate", response_model=ProfileGenerateResponse)
+async def generate_profile(
+    payload: ProfileGenerateRequest,
+    service: ProfileGenerationService = Depends(get_profile_generation_service),
+) -> ProfileGenerateResponse:
+    logger.info(
+        "profile api generate requested",
+        extra={"public_repo_url_count": len(payload.public_repo_urls), "local_repo_path_count": len(payload.local_repo_paths)},
+    )
+    return service.generate_profile(payload)
 
 
 @router.post("/cv/generate", response_model=CvGenerateResponse)

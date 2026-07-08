@@ -175,6 +175,22 @@ Usar estos niveles:
 - `declared-in-base-cv`: viene del CV base, no de repo.
 - `negative_signal`: se buscó evidencia y no apareció.
 
+## Generación asistida desde la UI
+
+La sección `Technical profile` de la UI incluye el botón `Generar perfil`.
+
+Acepta dos tipos de fuentes:
+
+- URLs HTTPS de repos públicos;
+- rutas locales de repos, útiles para repos privados.
+
+El flujo analiza archivos y estructura de los repos de forma conservadora, sin ejecutar código. Actualiza:
+
+- `items/profile/repo_evidence.jsonl`;
+- `items/profile/technical_experience.json`.
+
+El Markdown humano `items/profile/technical_experience.md` no se sobreescribe automáticamente. Después de generar, revisar el JSON y decidir si la narrativa Markdown necesita cambios manuales.
+
 ## Cómo agregar un nuevo repo
 
 1. Revisar estructura tracked del repo.

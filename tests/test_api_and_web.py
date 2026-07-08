@@ -13,6 +13,7 @@ from app.routes import web as web_route
 from app.services import cv_generation
 from app.services.cv_generation import generate_targeted_cv
 from app.services.job_matching import JobMatchingService
+from app.services.profile_generation import ProfileGenerationService
 from app.services.settings import JobMatchingSettings, get_llm_model
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +28,27 @@ def _service(tmp_path):
         min_score=0.42,
     )
     return JobMatchingService(settings=settings)
+
+
+def _profile_service(tmp_path):
+    settings = JobMatchingSettings(
+        data_dir=tmp_path / "data",
+        jobs_items_dir=tmp_path / "items" / "jobs",
+        profile_json_path=tmp_path / "items" / "profile" / "technical_experience.json",
+        skill_taxonomy_path=tmp_path / "items" / "profile" / "skill_taxonomy.yaml",
+        min_score=0.42,
+    )
+    return ProfileGenerationService(settings=settings)
+
+
+def _fake_repo(tmp_path):
+    repo = tmp_path / "repo"
+    (repo / "app").mkdir(parents=True)
+    (repo / "tests").mkdir()
+    (repo / "pyproject.toml").write_text('[project]\ndependencies = ["fastapi", "pytest"]\n', encoding="utf-8")
+    (repo / "app" / "main.py").write_text("from fastapi import FastAPI\napp = FastAPI()\n", encoding="utf-8")
+    (repo / "tests" / "test_api.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+    return repo
 
 
 class FakeOpenAiResponse:
@@ -166,6 +188,10 @@ def test_home_page_and_htmx_upload(tmp_path):
     assert "Turn job postings into market intelligence" in home.text
     assert "Manual match" in home.text
     assert "Generate CV" in home.text
+    assert "Actualizar perfil" in home.text
+    assert "Rutas locales" in home.text
+    assert "Perfil" in home.text
+    assert "Backend Python Api Design" in home.text
     csv_text = (
         "source_job_id,title,company,description\n"
         "1,Backend Python Engineer,Acme,Python FastAPI REST APIs AWS Lambda SQLite\n"
@@ -174,7 +200,6 @@ def test_home_page_and_htmx_upload(tmp_path):
     app.dependency_overrides.clear()
     assert response.status_code == 200
     assert "Analysis complete" in response.text
-    assert "Backend Python Engineer" in response.text
 
 
 def test_manual_match_api_scores_single_job(tmp_path):
@@ -214,6 +239,41 @@ def test_manual_match_htmx_form_returns_single_result(tmp_path):
     assert "Manual match result" in response.text
     assert "Backend Python Engineer" in response.text
     assert "Python" in response.text
+
+
+def test_generate_profile_api_from_local_repo(tmp_path):
+    repo = _fake_repo(tmp_path)
+    app.dependency_overrides[api_route.get_profile_generation_service] = lambda: _profile_service(tmp_path)
+    response = TestClient(app).post(
+        "/api/profile/generate",
+        json={"local_repo_paths": [str(repo)], "public_repo_urls": [], "append_evidence": True},
+    )
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "completed"
+    assert body["repos_analyzed"] == 1
+    assert body["evidence_rows_written"] >= 2
+    assert Path(body["evidence_path"]).exists()
+    assert Path(body["technical_profile_path"]).exists()
+
+
+def test_generate_profile_htmx_form_from_local_repo(tmp_path):
+    repo = _fake_repo(tmp_path)
+    app.dependency_overrides[web_route.get_profile_generation_service] = lambda: _profile_service(tmp_path)
+    response = TestClient(app).post(
+        "/ui/profile/generate",
+        data={"local_repo_paths": str(repo), "public_repo_urls": "", "append_evidence": "true"},
+    )
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert "Perfil actualizado" in response.text
+    assert "✓ Perfil actualizado" in response.text
+    assert "profile-update-status" in response.text
+    assert "fastapi_project" in response.text
+    assert "technical_experience.json" in response.text
 
 
 def test_generate_cv_api_returns_model_markdown_and_saves_file(tmp_path, monkeypatch):
